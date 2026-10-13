@@ -1,0 +1,143 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --color-brand-50: #f1f7f2;
+  --color-brand-100: #dcece0;
+  --color-brand-200: #b9d9c2;
+  --color-brand-500: #3f8a57;
+  --color-brand-600: #2f7044;
+  --color-brand-700: #255a37;
+  --color-brand-800: #1e472d;
+  --color-brand-900: #163522;
+  --color-saffron-400: #f0b44a;
+  --color-saffron-500: #e29a24;
+}
+
+@layer base {
+  body {
+    @apply bg-stone-100 text-stone-800 antialiased;
+  }
+  input[type='number']::-webkit-inner-spin-button {
+    opacity: 0.4;
+  }
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-stone-200 bg-white shadow-sm;
+  }
+  .btn-primary {
+    @apply btn bg-brand-700 text-white hover:bg-brand-800;
+  }
+  .btn-secondary {
+    @apply btn border border-stone-300 bg-white text-stone-700 hover:bg-stone-50;
+  }
+  .btn-danger {
+    @apply btn border border-red-200 bg-white text-red-700 hover:bg-red-50;
+  }
+  .btn-ghost {
+    @apply btn px-2 py-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800;
+  }
+  .input {
+    @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium tracking-wide text-stone-500 uppercase;
+  }
+  .table {
+    @apply w-full text-sm;
+  }
+  .table th {
+    @apply border-b border-stone-200 bg-stone-50 px-3 py-2 text-left text-xs font-semibold tracking-wide whitespace-nowrap text-stone-500 uppercase;
+  }
+  .table td {
+    @apply border-b border-stone-100 px-3 py-2 align-middle;
+  }
+  .table tbody tr:hover {
+    @apply bg-brand-50/50;
+  }
+  .num {
+    @apply text-right tabular-nums;
+  }
+}
+
+/* print preview sheet */
+.pp-sheet .print-area {
+  max-width: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 12mm;
+}
+.pp-sheet.pp-small .print-area {
+  font-size: 10px;
+  padding: 8mm;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  /* when the preview is open, print only the sheet */
+  body.preview-open #root,
+  body.preview-open .pp-toolbar {
+    display: none !important;
+  }
+  body.preview-open .print-preview {
+    position: static !important;
+    display: block !important;
+    background: white !important;
+  }
+  body.preview-open .pp-scroll {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  body.preview-open .pp-scroll > div {
+    width: auto !important;
+    height: auto !important;
+  }
+  body.preview-open .pp-sheet {
+    transform: none !important;
+    width: auto !important;
+    min-height: 0 !important;
+    box-shadow: none !important;
+  }
+  body.preview-open .pp-sheet .print-area {
+    padding: 0;
+  }
+  body.preview-open .pp-sheet tr {
+    break-inside: avoid;
+  }
+  body {
+    background: white;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
+
+/* print preview / printing: let invoice tables shrink to the paper */
+.pp-sheet table {
+  min-width: 0 !important;
+}
+@media print {
+  .print-area table {
+    min-width: 0 !important;
+  }
+}
+/* iOS: avoid zoom on input focus */
+@media (max-width: 767px) {
+  .input,
+  select.input {
+    font-size: 16px;
+  }
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}

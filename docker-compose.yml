@@ -1,0 +1,18 @@
+# PostgreSQL for development / a small office server.
+#   docker compose up -d
+# then put DATABASE_URL=postgres://pjd:pjd@localhost:5432/pjd_erp in backend/.env
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pjd
+      POSTGRES_PASSWORD: pjd
+      POSTGRES_DB: pjd_erp
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
