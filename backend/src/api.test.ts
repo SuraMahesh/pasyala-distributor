@@ -356,6 +356,15 @@ describe('password login', () => {
       expect((await api.get('/api/products').set(auth)).status).toBe(200)
       expect((await api.get('/api/auth/me').set(auth)).body.loggedIn).toBe(true)
       expect((await api.get('/api/products').set({ Authorization: `Bearer ${ok.body.token}x` })).status).toBe(401)
+      // invoice photos: <img> cannot send a header — the token in the link (?t=) works, but only for photo files
+      const p = (await api.get('/api/purchases?pageSize=1').set(auth)).body.items[0]
+      const img = await api.post(`/api/purchases/${p.id}/images`).set(auth).send({ mimeType: 'image/jpeg', data: Buffer.from('x'.repeat(300)).toString('base64'), thumb: Buffer.from('t'.repeat(80)).toString('base64'), sha256: 'a'.repeat(64), width: 10, height: 10 })
+      expect(img.status).toBe(201)
+      expect((await api.get(`/api/images/${img.body.id}/file`)).status).toBe(401)
+      expect((await api.get(`/api/images/${img.body.id}/file?t=${encodeURIComponent(ok.body.token)}`)).status).toBe(200)
+      expect((await api.get(`/api/images/${img.body.id}/file?size=thumb&t=${encodeURIComponent(ok.body.token)}`)).status).toBe(200)
+      expect((await api.get(`/api/products?t=${encodeURIComponent(ok.body.token)}`)).status).toBe(401) // not for other pages
+      expect((await api.delete(`/api/images/${img.body.id}`).set(auth)).status).toBe(200)
       process.env.APP_PASSWORD = 'changed'
       expect((await api.get('/api/products').set(auth)).status).toBe(401) // changing the password logs everyone out
     } finally {

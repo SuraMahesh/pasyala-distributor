@@ -72,7 +72,9 @@ export const requireAuth: RequestHandler = (req, res, next) => {
     next()
     return
   }
-  const token = (req.headers.authorization ?? '').replace(/^Bearer /, '')
+  // <img src="…"> cannot send a header, so invoice photos may carry the login token in the link (?t=)
+  const photoLink = req.method === 'GET' && /^\/images\/\d+\/file$/.test(req.path) && typeof req.query.t === 'string'
+  const token = (req.headers.authorization ?? '').replace(/^Bearer /, '') || (photoLink ? String(req.query.t) : '')
   if (token && verifyToken(token)) {
     next()
     return

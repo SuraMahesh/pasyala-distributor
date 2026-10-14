@@ -14,7 +14,7 @@ export default function InvoicePhotos() {
   const [s, set] = useListState({ kind: '', sort: 'date', dir: 'desc' as const })
   const pageSize = s.pageSize === 25 ? 24 : s.pageSize // grid of 2/3/4/6 per row
   const q = usePaged<InvoiceImageRow>('gallery', '/images', { ...s, pageSize })
-  const status = useQuery({ queryKey: ['images-status'], queryFn: () => api.get<{ ready: boolean; kind: 'blob' | 'local' }>('/images/status'), staleTime: 10 * 60_000 })
+  const status = useQuery({ queryKey: ['images-status'], queryFn: () => api.get<{ ready: boolean; kind: 'blob' | 'local'; found?: string[]; environment?: string | null }>('/images/status'), staleTime: 10 * 60_000 })
   const missing = useQuery({
     queryKey: ['gallery', 'missing'],
     queryFn: async () => {
@@ -30,7 +30,12 @@ export default function InvoicePhotos() {
     <div>
       <PageHeader title="Invoice photos" subtitle="Photos of the paper invoices, kept with each invoice. Add photos on an invoice's page, or scan a new invoice." />
       {status.data && !status.data.ready && (
-        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Photo storage is not set up yet. In Vercel open <b>Storage → Create → Blob</b> (Private), connect it to this project and redeploy.</p>
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p>Photo storage is not reachable. In Vercel open <b>Storage</b> → your Blob store → <b>Projects</b> → make sure this project is connected for <b>Production</b>, then <b>Redeploy</b> (new variables only reach the site after a redeploy).</p>
+          <p className="mt-1 text-xs text-amber-800">
+            This deployment ({status.data.environment ?? 'unknown'}) sees: {status.data.found?.length ? status.data.found.join(', ') : 'no BLOB_… variables'} — it needs BLOB_READ_WRITE_TOKEN or BLOB_STORE_ID.
+          </p>
+        </div>
       )}
       {missing.data && (missing.data.sales > 0 || missing.data.purchases > 0) && (
         <div className="mb-4 flex flex-wrap gap-2 text-sm">

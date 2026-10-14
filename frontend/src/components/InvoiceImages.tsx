@@ -14,7 +14,7 @@ export default function InvoiceImages({ kind, invoiceId, invoiceNo, partyName }:
   const confirm = useConfirm()
   const key = ['invoice-images', kind, invoiceId]
   const q = useQuery({ queryKey: key, queryFn: () => listPhotos(kind, invoiceId) })
-  const status = useQuery({ queryKey: ['images-status'], queryFn: () => api.get<{ ready: boolean; kind: 'blob' | 'local' }>('/images/status'), staleTime: 10 * 60_000 })
+  const status = useQuery({ queryKey: ['images-status'], queryFn: () => api.get<{ ready: boolean; kind: 'blob' | 'local'; found?: string[]; environment?: string | null }>('/images/status'), staleTime: 10 * 60_000 })
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<number | null>(null)
   const pick = useRef<HTMLInputElement>(null)
