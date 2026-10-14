@@ -50,6 +50,12 @@ describe('offline OCR invoice reading (no API key)', () => {
     // size one character off ("1180ML") still finds 180ML PINDA
     const r = parseInvoiceText('THPNOISO  1180ML PINDA V     3     850.00     22.00     1,989.00', 'purchase', catalog)
     expect(codeOf.get(r.lines![0].productId!)).toBe('THPN0180')
+    // a NEW product whose code looks like an existing one (D/U read alike) is not matched to it
+    const n = parseInvoiceText('THSD0030     30ML SIDDHARTHA THEL     12     240.00     22.00     2,246.40', 'purchase', catalog)
+    expect(n.lines![0]).toMatchObject({ productId: null, code: 'THSD0030', unitPrice: 240, qty: 12 })
+    // …but an exact code always matches, even if the name is misread
+    const e = parseInvoiceText('THSU0030     30ML S0OLAH4RA     12     200.00     22.00     1,872.00', 'purchase', catalog)
+    expect(codeOf.get(e.lines![0].productId!)).toBe('THSU0030')
     // amount with comma read as a dot: 4.11840 → 4,118.40 (24 × 220 − 22%)
     expect(read('415a3004').got).toContain('THSP0030:24+2')
   })

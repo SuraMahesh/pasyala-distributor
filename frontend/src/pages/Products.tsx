@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { FileSpreadsheet, Pencil, Percent, Plus, Trash2 } from 'lucide-react'
+import { FileSpreadsheet, Pencil, Percent, Plus, ScanLine, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CATEGORIES, rs, suggestProductCode, type Movement, type Paged, type PriceQuote, type Product, type ProductWithStock, type Promotion, type CustomerType } from '@pjd/shared'
 import { useConfirm } from '../components/Confirm'
+import ProductScan from '../components/ProductScan'
 import { ClientTable, DataTable, type Column } from '../components/DataTable'
 import { Badge, ErrorBox, Field, Filters, Modal, NumberInput, PageHeader, SearchBox, Spinner, Stat } from '../components/ui'
 import { api, fetchAll } from '../lib/api'
@@ -72,6 +73,7 @@ export default function Products() {
   const { data: meta } = useProductMeta()
   const [editing, setEditing] = useState<Product | null>(null)
   const [bulk, setBulk] = useState(false)
+  const [scanning, setScanning] = useState(false)
 
   const columns: Column<ProductGroup>[] = [
     {
@@ -109,6 +111,7 @@ export default function Products() {
                 rows: groupProducts(all).flatMap((g) => g.variants.map((p) => [g.name, p.size, p.category, p.listPrice, p.supplierDiscPct, p.sellPrice, p.onHand, p.freeOnHand, p.stockValue, p.reorderLevel, p.active, p.code])),
               }])
             }}><FileSpreadsheet size={16} /> Excel</button>
+            <button className="btn-secondary" onClick={() => setScanning(true)}><ScanLine size={16} /> Scan price list</button>
             <button className="btn-secondary" onClick={() => setBulk(true)}><Percent size={16} /> Bulk price change</button>
             <button className="btn-primary" onClick={() => setEditing(newProduct())}><Plus size={16} /> Add product</button>
           </>
@@ -155,6 +158,7 @@ export default function Products() {
         />
       )}
       {editing && <ProductForm product={editing} onClose={() => setEditing(null)} />}
+      {scanning && <ProductScan onClose={() => setScanning(false)} />}
       {bulk && <BulkPrice filters={s} total={variantCount} onClose={() => setBulk(false)} />}
     </div>
   )

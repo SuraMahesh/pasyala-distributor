@@ -55,9 +55,9 @@ export interface PreparedPhoto {
 }
 
 /** Shrink a phone photo to a sharp ~1800 px JPEG (~200–400 KB) plus a small preview. */
-export async function preparePhoto(file: File): Promise<PreparedPhoto> {
+export async function preparePhoto(file: Blob, opts: { sha256?: string } = {}): Promise<PreparedPhoto> {
   if (!file.type.startsWith('image/')) throw new Error('Choose a photo (JPG or PNG).')
-  const sha256 = await sha256Hex(file)
+  const sha256 = opts.sha256 ?? (await sha256Hex(file))
   let bitmap: ImageBitmap
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
@@ -114,4 +114,19 @@ export function rotatedSrc(url: string, rotation: number): Promise<string> {
     rotatedCache.set(key, p)
   }
   return p
+}
+
+/** A photo, or every page of a PDF (drawn as images), ready to attach. Same PDF twice → same ids → refused. */
+export async function prepareFiles(file: File, stage?: (m: string) => void): Promise<PreparedPhoto[]> {
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    const { readPdf, fileHash } = await import('./pdf')
+    const [pages, hash] = await Promise.all([readPdf(file, stage), fileHash(file)])
+    const out: PreparedPhoto[] = []
+    for (const [i, p] of pages.entries()) {
+      const pageHash = await sha256Hex(new Blob([`${hash}:page${i + 1}`]))
+      out.push(await preparePhoto(p.image, { sha256: pageHash }))
+    }
+    return out
+  }
+  return [await preparePhoto(file)]
 }

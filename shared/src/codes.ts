@@ -38,3 +38,23 @@ export function nameLetters(name: string) {
 export function suggestProductCode(name: string, size: string, category: Category) {
   return `${CATEGORY_PREFIX[category] ?? 'OT'}${nameLetters(name)}${sizeDigits(size)}`
 }
+
+/** Best guess of the category for a product read from a supplier document. */
+export function guessCategory(code: string, name: string, existing: { code: string; category: Category }[] = []): Category {
+  const prefix = code.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2)
+  if (prefix.length === 2) {
+    const counts = new Map<Category, number>()
+    for (const p of existing) if (p.code.toUpperCase().startsWith(prefix)) counts.set(p.category, (counts.get(p.category) ?? 0) + 1)
+    const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
+    if (top) return top[0]
+  }
+  const n = name.toUpperCase()
+  if (/THEL|OIL|THAILA/.test(n)) return 'Thailaya (Oil)'
+  if (/ARISHT|ASAV|SPRIT|SPIRIT|ARISHTA/.test(n)) return 'Arishta / Spirit'
+  if (/CHOORN|CHURN|POWDER/.test(n)) return 'Choorna / Powder'
+  if (/TABLET|GULI|PILL|CAPSUL/.test(n)) return 'Guli / Tablets'
+  if (/LEPA|BALM|PASTE|CREAM/.test(n)) return 'Lepa / Paste'
+  if (/RASAYAN/.test(n)) return 'Rasayana'
+  if (/HONEY|MEE PANI/.test(n)) return 'Honey'
+  return 'Other'
+}

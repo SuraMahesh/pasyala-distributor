@@ -566,3 +566,28 @@ describe('invoice photos', () => {
     expect(existsSync(uploadDir)).toBe(true)
   })
 })
+
+describe('Products → Scan: import new products and price changes', () => {
+  it('adds new products (supplier code kept) and updates prices together', async () => {
+    const before = await product('ATAB0030')
+    const res = await api.post('/api/products/import').send({
+      create: [{ code: 'CHTP0050', name: 'triphala choorna', size: '50g', category: 'Choorna / Powder', listPrice: 380, supplierDiscPct: 22, sellPrice: 380, reorderLevel: 5, openingStock: 0, active: true }],
+      update: [{ id: before.id, listPrice: 210, supplierDiscPct: 22, sellPrice: 210 }],
+    })
+    expect(res.status).toBe(201)
+    expect(res.body.created).toMatchObject([{ code: 'CHTP0050', name: 'TRIPHALA CHOORNA', size: '50g', listPrice: 380 }])
+    expect(res.body.updated).toBe(1)
+    expect(await product('ATAB0030')).toMatchObject({ listPrice: 210, sellPrice: 210, onHand: before.onHand })
+    // the same new product twice → refused, nothing saved
+    const again = await api.post('/api/products/import').send({
+      create: [{ code: '', name: 'TRIPHALA CHOORNA', size: '50g', category: 'Choorna / Powder', listPrice: 380, supplierDiscPct: 22, sellPrice: 380, reorderLevel: 5, openingStock: 0, active: true }],
+      update: [{ id: before.id, listPrice: 999, supplierDiscPct: 22 }],
+    })
+    expect(again.status).toBe(409)
+    expect(again.body.error).toMatch(/already exists \(CHTP0050\)/)
+    expect((await product('ATAB0030')).listPrice).toBe(210)
+    // put things back for other tests
+    await api.post('/api/products/import').send({ update: [{ id: before.id, listPrice: before.listPrice, supplierDiscPct: before.supplierDiscPct, sellPrice: before.sellPrice }] })
+    expect((await api.delete(`/api/products/${res.body.created[0].id}`)).status).toBe(200)
+  })
+})

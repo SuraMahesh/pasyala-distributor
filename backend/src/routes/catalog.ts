@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   bulkPriceSchema,
@@ -7,7 +7,9 @@ import {
   customerTypeSchema,
   listQuerySchema,
   priceRulesBatchSchema,
+  productImportSchema,
   productSchema,
+  type ProductInput,
   promotionSchema,
   quotePrice,
   suggestProductCode,
@@ -104,6 +106,16 @@ const productFilters = listQuerySchema.extend({
   stock: z.enum(['', 'in', 'low', 'out']).default(''),
 })
 
+/** item code: the supplier's code if given, else category + name + size (THMN0030 style); -2, -3 … if taken */
+async function createProduct(tx: Executor, input: ProductInput) {
+  const base = input.code || suggestProductCode(input.name, input.size, input.category)
+  const taken = new Set((await rows<{ code: string }>(tx, sql`select code from products where code like ${base + '%'}`)).map((r) => r.code))
+  let code = base
+  for (let n = 2; taken.has(code); n++) code = `${base}-${n}`
+  const [created] = await tx.insert(products).values({ ...input, code }).returning()
+  return created
+}
+
 export function catalogRoutes(db: DB) {
   const r = Router()
 
@@ -197,16 +209,33 @@ export function catalogRoutes(db: DB) {
 
   r.post('/products', async (req, res) => {
     const input = parse(productSchema, req.body)
-    const row = await db.transaction(async (tx) => {
-      // item code is created automatically from category + name + size (THMN0030 style)
-      const base = input.code || suggestProductCode(input.name, input.size, input.category)
-      const taken = new Set((await rows<{ code: string }>(tx, sql`select code from products where code like ${base + '%'}`)).map((r) => r.code))
-      let code = base
-      for (let n = 2; taken.has(code); n++) code = `${base}-${n}`
-      const [created] = await tx.insert(products).values({ ...input, code }).returning()
-      return created
-    })
+    const row = await db.transaction((tx) => createProduct(tx, input))
     res.status(201).json(toProduct(row))
+  })
+
+  // Products → Scan: new products + price updates read from a supplier document, saved together
+  r.post('/products/import', async (req, res) => {
+    const input = parse(productImportSchema, req.body)
+    const result = await db.transaction(async (tx) => {
+      let updated = 0
+      for (const u of input.update) {
+        const [row] = await tx
+          .update(products)
+          .set({ listPrice: u.listPrice, supplierDiscPct: u.supplierDiscPct, ...(u.sellPrice != null ? { sellPrice: u.sellPrice } : {}) })
+          .where(eq(products.id, u.id))
+          .returning({ id: products.id })
+        if (!row) throw notFound(`Product #${u.id}`)
+        updated++
+      }
+      const created = []
+      for (const p of input.create) {
+        const [dup] = await tx.select({ id: products.id, code: products.code }).from(products).where(and(eq(products.name, p.name), eq(products.size, p.size)))
+        if (dup) throw conflict(`${p.size} ${p.name} already exists (${dup.code}) — untick it or update its price instead`)
+        created.push(toProduct(await createProduct(tx, p)))
+      }
+      return { created, updated }
+    })
+    res.status(201).json(result)
   })
 
   r.put('/products/:id', async (req, res) => {

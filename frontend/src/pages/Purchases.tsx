@@ -13,6 +13,7 @@ import PrintPreview from '../components/PrintPreview'
 import { ErrorBox, Filters, PageHeader, SearchBox, Spinner, Stat, StatusBadge } from '../components/ui'
 import { api, fetchAll } from '../lib/api'
 import { downloadExcel } from '../lib/excel'
+import { quickPrint } from '../lib/print'
 import { useApiMutation, useListState, usePaged, useProductOptions, useSettings, useSupplierOptions } from '../lib/hooks'
 import { PaymentModal } from './Payments'
 
@@ -269,7 +270,7 @@ export function PurchaseView() {
             </button>
             <Link to={`/purchases/${inv.id}/edit`} className="btn-secondary"><Pencil size={15} /> Edit</Link>
             {inv.due > 0 && <button className="btn-secondary" onClick={() => setPaying(true)}><Wallet size={15} /> Pay</button>}
-            <button className="btn-secondary hidden sm:inline-flex" onClick={() => window.print()}><Printer size={15} /> Quick print</button>
+            <button className="btn-secondary hidden sm:inline-flex" onClick={() => quickPrint(`${inv.invoiceNo}`)}><Printer size={15} /> Quick print</button>
             <button className="btn-primary" onClick={() => setPreview(true)}><Eye size={15} /> Print preview</button>
           </>
         }

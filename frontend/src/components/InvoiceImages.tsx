@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import type { ImageInvoiceKind, InvoiceImage } from '@pjd/shared'
 import { api } from '../lib/api'
 import { errorMessage } from '../lib/hooks'
-import { imageUrl, listPhotos, preparePhoto, rotatedSrc, uploadPhoto, type PreparedPhoto } from '../lib/images'
+import { imageUrl, listPhotos, prepareFiles, rotatedSrc, uploadPhoto, type PreparedPhoto } from '../lib/images'
 import { useConfirm } from './Confirm'
 
 /** Photos of the paper invoice, shown on the invoice page. */
@@ -29,7 +29,7 @@ export default function InvoiceImages({ kind, invoiceId, invoiceNo, partyName }:
     setBusy(true)
     const prepared: PreparedPhoto[] = []
     try {
-      for (const f of chosen) prepared.push(await preparePhoto(f))
+      for (const f of chosen) prepared.push(...(await prepareFiles(f)))
     } catch (e) {
       toast.error(errorMessage(e))
       setBusy(false)
@@ -82,11 +82,11 @@ export default function InvoiceImages({ kind, invoiceId, invoiceNo, partyName }:
           <span className="text-sm font-normal text-stone-500">{list.length ? `${list.length} page${list.length > 1 ? 's' : ''}` : 'none yet'}</span>
         </h2>
         <div className="flex gap-2">
-          <input ref={pick} type="file" accept="image/*" multiple className="hidden" onChange={(e) => add(e.target.files)} />
+          <input ref={pick} type="file" accept="image/*,application/pdf,.pdf" multiple className="hidden" onChange={(e) => add(e.target.files)} />
           <input ref={camera} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => add(e.target.files)} />
           <button className="btn-primary sm:hidden" disabled={busy || !!notReady} onClick={() => camera.current?.click()}><Camera size={16} /> Take photo</button>
           <button className="btn-secondary" disabled={busy || !!notReady} onClick={() => pick.current?.click()}>
-            {busy ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />} Add photo
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />} Add photo / PDF
           </button>
         </div>
       </div>

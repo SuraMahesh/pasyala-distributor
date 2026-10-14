@@ -51,7 +51,7 @@ const BOTTOM = [
 export default function Layout() {
   const [open, setOpen] = useState(false)
   const { data: settings } = useSettings()
-  const company = settings?.name ?? 'Pasyala Janith Distributor'
+  const company = settings?.name ?? ''
   const loc = useLocation()
   const auth = useLogout()
   const confirm = useConfirm()
@@ -59,6 +59,9 @@ export default function Layout() {
     if (await confirm({ title: 'Log out?', message: 'You will need the password to open the system again on this device.', confirmText: 'Log out' })) auth.logout()
   }
   useEffect(() => setOpen(false), [loc.pathname])
+  useEffect(() => {
+    if (settings?.name) document.title = settings.name
+  }, [settings?.name])
 
   const nav = (
     <nav className="flex flex-col gap-0.5 p-3">

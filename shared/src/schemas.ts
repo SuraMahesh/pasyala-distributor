@@ -166,3 +166,13 @@ export type PurchaseInvoiceInput = z.infer<typeof purchaseInvoiceSchema>
 export type PaymentInput = z.infer<typeof paymentSchema>
 export type AdjustmentInput = z.infer<typeof adjustmentSchema>
 export type ListQuery = z.infer<typeof listQuerySchema>
+
+/** Products → Scan: add new products and update prices read from a supplier price list / invoice. */
+export const productImportSchema = z.object({
+  create: z.array(productSchema).max(300).default([]),
+  update: z
+    .array(z.object({ id: z.number().int().positive(), listPrice: money, supplierDiscPct: pct, sellPrice: money.optional() }))
+    .max(500)
+    .default([]),
+})
+export type ProductImportInput = z.infer<typeof productImportSchema>

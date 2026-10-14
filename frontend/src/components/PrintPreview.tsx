@@ -63,7 +63,7 @@ export default function PrintPreview({
 
   return createPortal(
     <div className="print-preview fixed inset-0 z-[60] flex flex-col bg-stone-700">
-      <style>{`@page { size: ${p.css} ${landscape ? 'landscape' : 'portrait'}; margin: 10mm; }`}</style>
+      <style>{`@page { size: ${p.css} ${landscape ? 'landscape' : 'portrait'}; margin: 0; }`}</style>
 
       <div className="pp-toolbar flex flex-wrap items-center gap-2 border-b border-stone-800 bg-stone-900 px-4 py-2 text-sm text-stone-100">
         <span className="mr-auto font-medium">Print preview · {title}</span>

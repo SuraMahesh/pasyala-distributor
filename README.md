@@ -157,3 +157,20 @@ logged-in users.
   page shows every photo (search by invoice no, supplier, customer, date) and how many invoices still have none.
 - Photos are shrunk in the browser to ~1800 px (≈200–400 KB) plus a small preview. Downloads are named
   `HOSI005967-p1.jpg`.
+
+## PDF invoices and price lists
+
+- **Sales / Purchases → New → Scan:** photos *and* PDF files. A PDF that contains text (e.g. emailed by the
+  supplier) is read exactly; a scanned PDF is read page by page with the free text reader. The PDF pages are kept
+  with the invoice as photos (up to 10 pages).
+- **Invoice photos → Add photo / PDF:** a PDF is attached as one photo per page; the same PDF cannot be attached twice.
+- **Products → Scan price list:** upload a supplier price list or invoice (photo or PDF). The review screen lists
+  *new products* (name, size, category guessed, supplier code kept as the stock code, prices) and *price changes*
+  for products you already have. Tick what you want and Save — new products start with 0 stock.
+- Product matching is strict on purpose: an exact code always matches; a code that only looks similar must also
+  have the right size and a matching name, so a new product is never mistaken for an existing one.
+
+## Printing
+
+Quick print and Print preview print only the invoice: the browser's own header/footer (page title, web address,
+date) is switched off, and the browser tab title follows the company name in Settings.

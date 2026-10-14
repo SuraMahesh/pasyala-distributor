@@ -5,8 +5,8 @@ import { toast } from 'sonner'
 import { parseInvoiceText, type ScanKind, type ScanResult } from '@pjd/shared'
 import { api } from '../lib/api'
 import { useProductOptions } from '../lib/hooks'
-import { ocrInvoiceImage } from '../lib/ocr'
-import { preparePhoto, uploadPhoto } from '../lib/images'
+import { prepareFiles, preparePhoto, uploadPhoto } from '../lib/images'
+import { readDocument } from '../lib/readDoc'
 import type { Draft, DraftLine } from './InvoiceEditor'
 import { blankLine } from './InvoiceEditor'
 import { Modal } from './ui'
@@ -61,6 +61,8 @@ export interface ScanState {
   file?: File
   /** degrees (clockwise) that make the photo upright — found while reading it */
   rotation?: number
+  /** PDF pages drawn as images — kept with the invoice */
+  pages?: { blob: Blob; sha256: string }[]
 }
 
 /** Turn what was read from the image into an editable draft. Prices come from the image, not the price list. */
@@ -113,13 +115,12 @@ export function ScanUpload({ kind, onScanned, compact = false }: { kind: ScanKin
         const result = await api.post<ScanResult>('/scan-invoice', { kind, mimeType: f.mimeType, data: f.data })
         state = { result, previewUrl: f.previewUrl, isPdf: f.isPdf, file }
       } else {
-        if (file.type === 'application/pdf') throw new Error('PDF files need the AI reader. Take a photo or a screenshot of the invoice instead.')
-        const { text, rotation } = await ocrInvoiceImage(file, (m) => toast.loading(m, { id: t }))
+        const doc = await readDocument(file, (m) => toast.loading(m, { id: t }))
         toast.loading('Matching products…', { id: t })
         const catalog = products.filter((p) => p.active).map(({ id, code, name, size, listPrice, supplierDiscPct }) => ({ id, code, name, size, listPrice, supplierDiscPct }))
-        const raw = parseInvoiceText(text, kind, catalog)
+        const raw = parseInvoiceText(doc.text, kind, catalog)
         const result = await api.post<ScanResult>('/scan-invoice/parse', { kind, raw })
-        state = { result, previewUrl: URL.createObjectURL(file), isPdf: false, offline: true, file, rotation }
+        state = { result, previewUrl: doc.previewUrl, isPdf: false, offline: true, file, rotation: doc.rotation, pages: doc.pages }
       }
       const { result } = state
       const matched = result.lines.filter((l) => l.productId).length
@@ -137,7 +138,7 @@ export function ScanUpload({ kind, onScanned, compact = false }: { kind: ScanKin
 
   const inputs = (
     <>
-      <input ref={input} type="file" accept={ai ? 'image/*,application/pdf' : 'image/*'} className="hidden" onChange={(e) => handle(e.target.files?.[0])} />
+      <input ref={input} type="file" accept="image/*,application/pdf,.pdf" className="hidden" onChange={(e) => handle(e.target.files?.[0])} />
       <input ref={camera} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handle(e.target.files?.[0])} />
     </>
   )
@@ -170,7 +171,7 @@ export function ScanUpload({ kind, onScanned, compact = false }: { kind: ScanKin
           <p className="text-sm text-stone-500">
             {ai
               ? 'Take a photo or upload an image / PDF. The form fills in for you — check every line, edit anything, then save.'
-              : 'Take a flat, sharp photo in good light, or upload one. It is read on this device (free, no internet AI) — check every line, edit anything, then save.'}
+              : 'Take a flat, sharp photo, or upload a photo or PDF. It is read on this device (free) — check every line, edit anything, then save.'}
           </p>
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
@@ -235,14 +236,15 @@ export function ScanReview({ scan, onClear, kind, onScanned }: { scan: ScanState
 
 /** After a scanned invoice is saved, keep the photo with it. */
 export async function attachScanPhoto(kind: ScanKind, invoiceId: number, invoiceNo: string, scan: ScanState) {
-  if (!scan.file || scan.isPdf) {
-    if (scan.isPdf) toast.info('PDF files are not kept — add a photo on the invoice page if you want one.')
-    return
-  }
+  if (!scan.file) return
   try {
-    const img = await uploadPhoto(kind, invoiceId, await preparePhoto(scan.file))
-    if (scan.rotation) await api.send('PATCH', `/images/${img.id}`, { rotation: scan.rotation }) // saved upright
-    toast.success(`Photo attached to ${invoiceNo}`)
+    // a PDF is kept as one photo per page
+    const photos = scan.pages ? await Promise.all(scan.pages.map((p) => preparePhoto(p.blob, { sha256: p.sha256 }))) : await prepareFiles(scan.file)
+    for (const photo of photos) {
+      const img = await uploadPhoto(kind, invoiceId, photo)
+      if (scan.rotation && photos.length === 1) await api.send('PATCH', `/images/${img.id}`, { rotation: scan.rotation }) // saved upright
+    }
+    toast.success(photos.length > 1 ? `${photos.length} pages attached to ${invoiceNo}` : `Photo attached to ${invoiceNo}`)
   } catch (e) {
     toast.error(`Invoice saved, but the photo was not attached: ${e instanceof Error ? e.message : e}. Add it on the invoice page.`, { duration: 10000 })
   }

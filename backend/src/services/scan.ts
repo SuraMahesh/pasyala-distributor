@@ -70,7 +70,7 @@ export function claudeScanner(apiKey: string, model = process.env.ANTHROPIC_MODE
       model,
       max_tokens: 8000,
       system:
-        'You read invoices for Pasyala Janith Distributor, a Sri Lankan distributor of Ayurveda products (oils/thailaya, arishta, choorna, rasayana, honey). ' +
+        'You read invoices for a Sri Lankan distributor of Ayurveda products (oils/thailaya, arishta, choorna, rasayana, honey). ' +
         'Copy numbers exactly as printed — never guess or recalculate. Quantities in the "free" / "FOC" / "free issue" column go in freeQty. ' +
         'Per-line discount % goes in discPct; a discount applied to the whole bill total goes in billDiscPct. ' +
         'Match each line to the CATALOG by name and size; if two catalog items are possible, use null. Add a note for anything you could not read clearly.',

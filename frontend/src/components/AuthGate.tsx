@@ -58,7 +58,7 @@ function Centered({ children }: { children: ReactNode }) {
         <div className="mb-5 flex items-center gap-2.5">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-saffron-400 text-brand-900"><Leaf size={22} /></span>
           <div className="leading-tight">
-            <p className="font-semibold text-stone-900">Pasyala Janith Distributor</p>
+            <p className="font-semibold text-stone-900">Distribution ERP</p>
             <p className="text-xs text-stone-500">Ayurveda distribution ERP</p>
           </div>
         </div>

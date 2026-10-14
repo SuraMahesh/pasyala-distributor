@@ -148,26 +148,34 @@ interface Match {
 
 function matchProduct(codeText: string, sizeKeyRead: string | null, nameText: string, catalog: OcrCatalogItem[], priceRead: number | null): Match | null {
   const shape = codeShape(codeText)
+  const rawCode = codeText.toUpperCase().replace(/[^A-Z0-9]/g, '')
   const knownSizes = new Set(catalog.map((c) => sizeKey(c.size)))
+  const nameReadable = nameText.replace(/[^A-Za-z]/g, '').length >= 4
   let best: Match | null = null
   for (const item of catalog) {
-    let score = 0
-    if (shape.length >= 6) {
-      const d = levenshtein(shape, codeShape(item.code))
-      score += d === 0 ? 3 : d === 1 ? 2 : d === 2 ? 1 : 0
-    }
+    const exactCode = rawCode.length >= 6 && rawCode === item.code.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    const codeD = shape.length >= 6 ? levenshtein(shape, codeShape(item.code)) : 99
     const itemSize = sizeKey(item.size)
-    if (sizeKeyRead != null && itemSize === sizeKeyRead) score += 1.5
     // "1180ML" for 180ML: one character off and no product has the size as read
-    else if (sizeKeyRead && !knownSizes.has(sizeKeyRead) && levenshtein(itemSize, sizeKeyRead) <= 1) score += 1
-    else if (sizeKeyRead) score -= 1
+    const sizeOk = sizeKeyRead == null || itemSize === sizeKeyRead || (!knownSizes.has(sizeKeyRead) && levenshtein(itemSize, sizeKeyRead) <= 1)
     const ns = bigramSim(item.name, nameText)
-    score += ns >= 0.85 ? 2 : ns >= 0.65 ? 1.2 : ns >= 0.5 ? 0.5 : 0
-    if (priceRead && priceRead === item.listPrice) score += 0.8
+    const priceSame = !!priceRead && priceRead === item.listPrice
+    // Rules — a wrong match silently changes the wrong product, so be strict:
+    //  1. the exact code always matches
+    //  2. a code 1 character off (O/0, S/5 …) needs the right size and a name that does not contradict it
+    //  3. otherwise the name must clearly be the same and the size must agree
+    //     (or: similar name + same size + same unit price)
+    const ok =
+      exactCode ||
+      (codeD <= 1 && sizeOk && (!nameReadable || ns >= 0.4)) ||
+      (codeD === 2 && sizeOk && ns >= 0.65) ||
+      (sizeOk && sizeKeyRead != null && ns >= 0.72) ||
+      (itemSize === sizeKeyRead && priceSame && ns >= 0.5)
+    if (!ok) continue
+    const score = (exactCode ? 10 : 0) + (3 - Math.min(codeD, 3)) + (itemSize === sizeKeyRead ? 1.5 : 0) + ns * 2 + (priceSame ? 0.8 : 0)
     if (!best || score > best.score) best = { item, score }
   }
-  // need: code nearly exact, or right size + name close
-  return best && best.score >= 3 ? best : null
+  return best
 }
 
 // ------------------------------------------------------------------ numbers on one item line

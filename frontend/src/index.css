@@ -79,9 +79,16 @@
   padding: 8mm;
 }
 
+/* margin 0 = the browser does not print its own header/footer (page title, web address, date) */
+@page {
+  margin: 0;
+}
 @media print {
   .no-print {
     display: none !important;
+  }
+  .print-area {
+    padding: 12mm !important;
   }
   /* when the preview is open, print only the sheet */
   body.preview-open #root,
@@ -108,7 +115,7 @@
     box-shadow: none !important;
   }
   body.preview-open .pp-sheet .print-area {
-    padding: 0;
+    padding: 10mm !important;
   }
   body.preview-open .pp-sheet tr {
     break-inside: avoid;

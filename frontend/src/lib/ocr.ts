@@ -87,7 +87,7 @@ function rotate(src: HTMLCanvasElement, deg: number, longEdge?: number) {
 }
 
 /** Read all text on an invoice photo, turning it the right way up first. */
-export async function ocrInvoiceImage(file: File, stage: Stage): Promise<{ text: string; rotation: number }> {
+export async function ocrInvoiceImage(file: Blob, stage: Stage): Promise<{ text: string; rotation: number }> {
   let bitmap: ImageBitmap
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
