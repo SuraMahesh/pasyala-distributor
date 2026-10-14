@@ -1,0 +1,1 @@
+ALTER TABLE "invoice_images" ADD COLUMN "rotation" integer DEFAULT 0 NOT NULL;

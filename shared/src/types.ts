@@ -350,3 +350,28 @@ export interface PurchaseUsage {
   used: boolean
   items: PurchaseUsageItem[]
 }
+
+// ---------------- photos of the paper invoices
+
+export type ImageInvoiceKind = 'sale' | 'purchase'
+
+export interface InvoiceImage {
+  id: number
+  kind: ImageInvoiceKind
+  invoiceId: number
+  invoiceNo: string
+  page: number
+  size: number
+  width: number
+  height: number
+  /** turn clockwise when showing: 0 / 90 / 180 / 270 */
+  rotation: number
+  createdAt: string
+}
+
+/** gallery row */
+export interface InvoiceImageRow extends InvoiceImage {
+  date: string
+  partyName: string
+  netTotal: number
+}

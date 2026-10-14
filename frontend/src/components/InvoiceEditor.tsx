@@ -97,6 +97,7 @@ export default function InvoiceEditor({
   renderPreview,
   scanned = false,
   printedTotal = null,
+  imageInvoiceNo = null,
 }: {
   mode: 'sale' | 'purchase'
   initial: Draft
@@ -113,6 +114,8 @@ export default function InvoiceEditor({
   scanned?: boolean
   /** net total printed on the scanned invoice, to compare with the lines */
   printedTotal?: number | null
+  /** invoice number read from the attached photo — warn if it differs from what is entered */
+  imageInvoiceNo?: string | null
 }) {
   const confirm = useConfirm()
   const { data: products = [] } = useProductOptions()
@@ -162,6 +165,8 @@ export default function InvoiceEditor({
         return p && l.qty > 0 && (lineNet(l) * billFactor) / (l.qty + l.freeQty) + 0.005 < p.avgCost
       })
     : []
+  const normNo = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const numberOff = mode === 'purchase' && !!imageInvoiceNo && !!d.invoiceNo.trim() && normNo(imageInvoiceNo) !== normNo(d.invoiceNo)
   const totalOff = printedTotal != null && validLines.length > 0 && Math.abs(t.netTotal - printedTotal) > 1
   const projected = customer ? customer.balance - previousOutstanding + (t.netTotal - paid) : 0
   const overLimit = mode === 'sale' && customer && customer.creditLimit > 0 && projected > customer.creditLimit
@@ -215,6 +220,7 @@ export default function InvoiceEditor({
       ...(overLimit ? [`${customer!.name} will be over the credit limit (Rs ${rs(projected)} of Rs ${rs(customer!.creditLimit)}).`] : []),
       ...(belowCost.length ? [`${belowCost.length} item(s) priced below cost.`] : []),
       ...(totalOff ? [`Lines add up to Rs ${rs(t.netTotal)} but the image shows Rs ${rs(printedTotal!)}.`] : []),
+      ...(numberOff ? [`The photo reads invoice ${imageInvoiceNo}, but you entered ${d.invoiceNo}. The photo will be attached to ${d.invoiceNo} — make sure it is the same paper.`] : []),
     ]
     const ok = await confirm({
       title: isEditing ? 'Save changes to this invoice?' : scanned ? 'Save invoice read from image?'  : mode === 'sale' ? 'Create this sales invoice?' : 'Save this supplier invoice?',

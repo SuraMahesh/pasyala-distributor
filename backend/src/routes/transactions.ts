@@ -26,12 +26,16 @@ import { customerDues, supplierDues } from '../services/dues'
 import { deletePurchase, deleteSale, getPurchase, getSale, savePurchase, saveSale } from '../services/invoices'
 import { assertStockAvailable } from '../services/stock'
 import { purchaseUsage } from '../services/usage'
+import { removeFiles } from '../services/files'
+import { imagesOf } from './images'
 
 const dateRange = {
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('').transform(() => undefined)),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('').transform(() => undefined)),
 }
 const statusFilter = z.enum(['', 'paid', 'due', 'overdue']).default('')
+const imagesFilter = z.enum(['', 'has', 'none']).default('')
+const byImages = <T extends { imageCount: number }>(items: T[], f: string) => (f === 'has' ? items.filter((i) => i.imageCount > 0) : f === 'none' ? items.filter((i) => i.imageCount === 0) : items)
 
 const invoiceSorters = {
   invoiceNo: (i: { invoiceNo: string }) => i.invoiceNo,
@@ -50,7 +54,7 @@ export function transactionRoutes(db: DB) {
 
   // ---------------- sales
   r.get('/sales', async (req, res) => {
-    const q = listQuerySchema.extend({ ...dateRange, customerId: z.coerce.number().int().optional(), typeId: z.coerce.number().int().optional(), status: statusFilter }).parse(req.query)
+    const q = listQuerySchema.extend({ ...dateRange, customerId: z.coerce.number().int().optional(), typeId: z.coerce.number().int().optional(), status: statusFilter, images: imagesFilter }).parse(req.query)
     const where: SQL[] = []
     if (q.from) where.push(gte(salesInvoices.date, q.from))
     if (q.to) where.push(lte(salesInvoices.date, q.to))
@@ -62,6 +66,7 @@ export function transactionRoutes(db: DB) {
           id: salesInvoices.id, invoiceNo: salesInvoices.invoiceNo, date: salesInvoices.date, payMethod: salesInvoices.payMethod,
           netTotal: salesInvoices.netTotal, costTotal: salesInvoices.costTotal, paidOnInvoice: salesInvoices.paidOnInvoice,
           customerId: salesInvoices.customerId, partyName: customers.name, area: customers.area, typeName: customerTypes.name,
+          imageCount: sql<number>`(select count(*)::int from invoice_images ii where ii.sales_invoice_id = ${salesInvoices.id})`,
         })
         .from(salesInvoices)
         .innerJoin(customers, eq(customers.id, salesInvoices.customerId))
@@ -73,6 +78,7 @@ export function transactionRoutes(db: DB) {
     if (q.status === 'paid') items = items.filter((i) => i.status === 'paid')
     if (q.status === 'due') items = items.filter((i) => i.status !== 'paid')
     if (q.status === 'overdue') items = items.filter((i) => i.overdue)
+    items = byImages(items, q.images)
     const { filtered, ...page } = paginate(items, q, {
       search: (i) => `${i.invoiceNo} ${i.partyName} ${i.area} ${i.typeName}`,
       sorters: invoiceSorters,
@@ -85,13 +91,16 @@ export function transactionRoutes(db: DB) {
   r.post('/sales', async (req, res) => res.status(201).json(await saveSale(db, parse(salesInvoiceSchema, req.body))))
   r.put('/sales/:id', async (req, res) => res.json(await saveSale(db, parse(salesInvoiceSchema, req.body), idParam(req.params.id))))
   r.delete('/sales/:id', async (req, res) => {
-    await deleteSale(db, idParam(req.params.id))
+    const id = idParam(req.params.id)
+    const files = await imagesOf(db, 'sale', id)
+    await deleteSale(db, id)
+    await removeFiles(files) // photos go with the invoice
     res.json({ ok: true })
   })
 
   // ---------------- purchases
   r.get('/purchases', async (req, res) => {
-    const q = listQuerySchema.extend({ ...dateRange, supplierId: z.coerce.number().int().optional(), status: statusFilter }).parse(req.query)
+    const q = listQuerySchema.extend({ ...dateRange, supplierId: z.coerce.number().int().optional(), status: statusFilter, images: imagesFilter }).parse(req.query)
     const where: SQL[] = []
     if (q.from) where.push(gte(purchaseInvoices.date, q.from))
     if (q.to) where.push(lte(purchaseInvoices.date, q.to))
@@ -105,6 +114,7 @@ export function transactionRoutes(db: DB) {
           lineCount: sql<number>`(select count(*)::int from purchase_lines pl where pl.invoice_id = ${purchaseInvoices.id})`,
           units: sql<number>`(select coalesce(sum(qty), 0)::int from purchase_lines pl where pl.invoice_id = ${purchaseInvoices.id})`,
           freeUnits: sql<number>`(select coalesce(sum(free_qty), 0)::int from purchase_lines pl where pl.invoice_id = ${purchaseInvoices.id})`,
+          imageCount: sql<number>`(select count(*)::int from invoice_images ii where ii.purchase_invoice_id = ${purchaseInvoices.id})`,
         })
         .from(purchaseInvoices)
         .innerJoin(suppliers, eq(suppliers.id, purchaseInvoices.supplierId))
@@ -115,6 +125,7 @@ export function transactionRoutes(db: DB) {
     if (q.status === 'paid') items = items.filter((i) => i.status === 'paid')
     if (q.status === 'due') items = items.filter((i) => i.status !== 'paid')
     if (q.status === 'overdue') items = items.filter((i) => i.overdue)
+    items = byImages(items, q.images)
     const { filtered, ...page } = paginate(items, q, {
       search: (i) => `${i.invoiceNo} ${i.orderNo} ${i.partyName}`,
       sorters: invoiceSorters,
@@ -126,7 +137,10 @@ export function transactionRoutes(db: DB) {
   r.post('/purchases', async (req, res) => res.status(201).json(await savePurchase(db, parse(purchaseInvoiceSchema, req.body))))
   r.put('/purchases/:id', async (req, res) => res.json(await savePurchase(db, parse(purchaseInvoiceSchema, req.body), idParam(req.params.id))))
   r.delete('/purchases/:id', async (req, res) => {
-    await deletePurchase(db, idParam(req.params.id))
+    const id = idParam(req.params.id)
+    const files = await imagesOf(db, 'purchase', id)
+    await deletePurchase(db, id)
+    await removeFiles(files) // photos go with the invoice
     res.json({ ok: true })
   })
 

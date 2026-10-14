@@ -53,6 +53,7 @@ const router = createBrowserRouter([
       { path: 'customers/:id', element: page(parties, 'CustomerDetail') },
       { path: 'suppliers', element: page(parties, 'SupplierList') },
       { path: 'suppliers/:id', element: page(parties, 'SupplierDetail') },
+      { path: 'photos', element: page(() => import('./pages/InvoicePhotos')) },
       { path: 'payments', element: page(() => import('./pages/Payments')) },
       { path: 'reports', element: page(() => import('./pages/Reports')) },
       { path: 'settings', element: page(() => import('./pages/Settings')) },

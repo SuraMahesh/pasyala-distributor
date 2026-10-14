@@ -3,6 +3,7 @@ import {
   Boxes,
   FileInput,
   FileOutput,
+  Images,
   LayoutDashboard,
   Leaf,
   LogOut,
@@ -34,6 +35,7 @@ const NAV = [
   { to: '/purchases', label: 'Purchases (GRN)', icon: FileInput },
   { to: '/suppliers', label: 'Suppliers', icon: Truck },
   { to: '/payments', label: 'Payments', icon: Wallet },
+  { to: '/photos', label: 'Invoice photos', icon: Images },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]

@@ -8,6 +8,20 @@
       "when": 1791784855542,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791955803306,
+      "tag": "0001_invoice_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791956356330,
+      "tag": "0002_image_rotation",
+      "breakpoints": true
     }
   ]
 }

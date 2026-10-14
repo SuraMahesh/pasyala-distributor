@@ -6,6 +6,7 @@ import { parseInvoiceText, type ScanKind, type ScanResult } from '@pjd/shared'
 import { api } from '../lib/api'
 import { useProductOptions } from '../lib/hooks'
 import { ocrInvoiceImage } from '../lib/ocr'
+import { preparePhoto, uploadPhoto } from '../lib/images'
 import type { Draft, DraftLine } from './InvoiceEditor'
 import { blankLine } from './InvoiceEditor'
 import { Modal } from './ui'
@@ -56,6 +57,10 @@ export interface ScanState {
   isPdf: boolean
   /** read offline in the browser (no AI) */
   offline?: boolean
+  /** the photo itself — attached to the invoice when it is saved */
+  file?: File
+  /** degrees (clockwise) that make the photo upright — found while reading it */
+  rotation?: number
 }
 
 /** Turn what was read from the image into an editable draft. Prices come from the image, not the price list. */
@@ -106,15 +111,15 @@ export function ScanUpload({ kind, onScanned, compact = false }: { kind: ScanKin
       if (ai) {
         const f = await prepareFile(file)
         const result = await api.post<ScanResult>('/scan-invoice', { kind, mimeType: f.mimeType, data: f.data })
-        state = { result, previewUrl: f.previewUrl, isPdf: f.isPdf }
+        state = { result, previewUrl: f.previewUrl, isPdf: f.isPdf, file }
       } else {
         if (file.type === 'application/pdf') throw new Error('PDF files need the AI reader. Take a photo or a screenshot of the invoice instead.')
-        const text = await ocrInvoiceImage(file, (m) => toast.loading(m, { id: t }))
+        const { text, rotation } = await ocrInvoiceImage(file, (m) => toast.loading(m, { id: t }))
         toast.loading('Matching products…', { id: t })
         const catalog = products.filter((p) => p.active).map(({ id, code, name, size, listPrice, supplierDiscPct }) => ({ id, code, name, size, listPrice, supplierDiscPct }))
         const raw = parseInvoiceText(text, kind, catalog)
         const result = await api.post<ScanResult>('/scan-invoice/parse', { kind, raw })
-        state = { result, previewUrl: URL.createObjectURL(file), isPdf: false, offline: true }
+        state = { result, previewUrl: URL.createObjectURL(file), isPdf: false, offline: true, file, rotation }
       }
       const { result } = state
       const matched = result.lines.filter((l) => l.productId).length
@@ -226,4 +231,19 @@ export function ScanReview({ scan, onClear, kind, onScanned }: { scan: ScanState
       </Modal>
     </div>
   )
+}
+
+/** After a scanned invoice is saved, keep the photo with it. */
+export async function attachScanPhoto(kind: ScanKind, invoiceId: number, invoiceNo: string, scan: ScanState) {
+  if (!scan.file || scan.isPdf) {
+    if (scan.isPdf) toast.info('PDF files are not kept — add a photo on the invoice page if you want one.')
+    return
+  }
+  try {
+    const img = await uploadPhoto(kind, invoiceId, await preparePhoto(scan.file))
+    if (scan.rotation) await api.send('PATCH', `/images/${img.id}`, { rotation: scan.rotation }) // saved upright
+    toast.success(`Photo attached to ${invoiceNo}`)
+  } catch (e) {
+    toast.error(`Invoice saved, but the photo was not attached: ${e instanceof Error ? e.message : e}. Add it on the invoice page.`, { duration: 10000 })
+  }
 }

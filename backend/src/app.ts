@@ -10,6 +10,7 @@ import { authRoutes, requireAuth } from './auth'
 import type { DB } from './db/client'
 import { errorHandler } from './errors'
 import { catalogRoutes } from './routes/catalog'
+import { imageRoutes } from './routes/images'
 import { insightRoutes } from './routes/insights'
 import { partyRoutes } from './routes/parties'
 import { scanRoutes } from './routes/scan'
@@ -35,6 +36,7 @@ export function createApp(db: DB, opts: { log?: boolean; staticDir?: string; cor
   api.use(partyRoutes(db))
   api.use(transactionRoutes(db))
   api.use(insightRoutes(db))
+  api.use(imageRoutes(db))
   api.use(opts.scanner === undefined ? scanRoutes(db) : scanRoutes(db, opts.scanner))
   api.use((_req, res) => {
     res.status(404).json({ error: 'API route not found' })

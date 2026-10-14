@@ -227,3 +227,33 @@ export const stockAdjustments = pgTable(
   },
   (t) => [index('adj_product_idx').on(t.productId)],
 )
+
+/** Photos / scans of the paper invoices. Each belongs to exactly one sales or purchase invoice. */
+export const invoiceImages = pgTable(
+  'invoice_images',
+  {
+    id: serial('id').primaryKey(),
+    salesInvoiceId: integer('sales_invoice_id').references(() => salesInvoices.id, { onDelete: 'cascade' }),
+    purchaseInvoiceId: integer('purchase_invoice_id').references(() => purchaseInvoices.id, { onDelete: 'cascade' }),
+    page: integer('page').notNull().default(1),
+    /** 'blob' (Vercel Blob) or 'local' (folder on this computer) */
+    storage: text('storage').notNull(),
+    path: text('path').notNull(),
+    thumbPath: text('thumb_path').notNull(),
+    mimeType: text('mime_type').notNull().default('image/jpeg'),
+    size: integer('size').notNull(),
+    width: integer('width').notNull().default(0),
+    height: integer('height').notNull().default(0),
+    /** how far to turn the photo when showing it: 0, 90, 180 or 270 degrees clockwise */
+    rotation: integer('rotation').notNull().default(0),
+    /** sha-256 of the original photo file — the same photo cannot be attached twice */
+    sha256: text('sha256').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('invoice_images_sha_uq').on(t.sha256),
+    index('invoice_images_sale_idx').on(t.salesInvoiceId),
+    index('invoice_images_purchase_idx').on(t.purchaseInvoiceId),
+    check('invoice_images_one_invoice', sql`(${t.salesInvoiceId} is null) <> (${t.purchaseInvoiceId} is null)`),
+  ],
+)

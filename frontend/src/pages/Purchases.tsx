@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { Eye, FileSpreadsheet, Lock, Pencil, Plus, Printer, ScanLine, Trash2, Wallet } from 'lucide-react'
+import { Eye, FileSpreadsheet, Paperclip, Lock, Pencil, Plus, Printer, ScanLine, Trash2, Wallet } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useInRouterContext, useNavigate, useParams } from 'react-router-dom'
 import { rs, type PurchaseInvoice, type PurchaseUsage } from '@pjd/shared'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
 import InvoiceDocument from '../components/InvoiceDocument'
+import InvoiceImages from '../components/InvoiceImages'
 import InvoiceEditor, { blankLine, emptyDraft, type Draft } from '../components/InvoiceEditor'
-import { ScanReview, ScanUpload, scanToDraft, type ScanState } from '../components/InvoiceScan'
+import { attachScanPhoto, ScanReview, ScanUpload, scanToDraft, type ScanState } from '../components/InvoiceScan'
 import PrintPreview from '../components/PrintPreview'
 import { ErrorBox, Filters, PageHeader, SearchBox, Spinner, Stat, StatusBadge } from '../components/ui'
 import { api, fetchAll } from '../lib/api'
@@ -31,14 +32,16 @@ interface PurchaseRow {
   due: number
   status: PurchaseInvoice['status']
   overdue: boolean
+  imageCount: number
 }
 
 export function PurchaseList() {
-  const [s, set] = useListState({ from: '', to: '', status: '', supplierId: '', sort: 'date', dir: 'desc' as const })
+  const [s, set] = useListState({ from: '', to: '', status: '', supplierId: '', images: '', sort: 'date', dir: 'desc' as const })
   const { data: suppliers = [] } = useSupplierOptions()
   const q = usePaged<PurchaseRow, { count: number; netTotal: number; due: number }>('purchases', '/purchases', s)
   const columns: Column<PurchaseRow>[] = [
     { key: 'no', header: 'Invoice no', sortKey: 'invoiceNo', render: (r) => <Link to={`/purchases/${r.id}`} className="font-medium text-brand-700 hover:underline">{r.invoiceNo}</Link> },
+    { key: 'photo', header: <Paperclip size={14} aria-label="Photos" />, align: 'center', mobile: false, render: (r) => (r.imageCount ? <span className="inline-flex items-center gap-0.5 text-xs text-brand-700" title={`${r.imageCount} photo(s) of the paper invoice`}><Paperclip size={13} />{r.imageCount > 1 ? r.imageCount : ''}</span> : <span className="text-xs text-stone-300" title="No photo yet">—</span>) },
     { key: 'date', header: 'Date', sortKey: 'date', render: (r) => <span className="text-stone-500">{r.date}</span> },
     { key: 'sup', header: 'Supplier', sortKey: 'party', render: (r) => r.partyName },
     { key: 'order', header: 'Order no', hideBelow: 'lg', render: (r) => <span className="text-stone-500">{r.orderNo}</span>, mobile: false },
@@ -78,6 +81,11 @@ export function PurchaseList() {
         <select className="input" value={s.supplierId} onChange={(e) => set({ supplierId: e.target.value })}>
           <option value="">All suppliers</option>
           {suppliers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <select className="input" value={s.images} onChange={(e) => set({ images: e.target.value })} aria-label="Photos">
+          <option value="">Photos: all</option>
+          <option value="has">With photo</option>
+          <option value="none">Missing photo</option>
         </select>
         <select className="input" value={s.status} onChange={(e) => set({ status: e.target.value })}>
           <option value="">All statuses</option>
@@ -163,7 +171,13 @@ export function PurchaseEdit() {
   const usage = useQuery({ queryKey: ['purchases', id, 'usage'], queryFn: () => api.get<PurchaseUsage>(`/purchases/${id}/usage`), enabled: !!id })
   const save = useApiMutation(
     ({ body }: { body: unknown }) => (id ? api.put<{ id: number; invoiceNo: string }>(`/purchases/${id}`, body) : api.post<{ id: number; invoiceNo: string }>('/purchases', body)),
-    { success: (r) => `Purchase ${r.invoiceNo} saved — stock updated`, onSuccess: (r) => nav(`/purchases/${r.id}`, { replace: true }) },
+    {
+      success: (r) => `Purchase ${r.invoiceNo} saved — stock updated`,
+      onSuccess: async (r) => {
+        if (scan?.file && !id) await attachScanPhoto('purchase', r.id, r.invoiceNo, scan)
+        nav(`/purchases/${r.id}`, { replace: true })
+      },
+    },
   )
   if (id && existing.isLoading) return <Spinner />
   if (id && existing.error) return <ErrorBox error={existing.error} />
@@ -187,6 +201,7 @@ export function PurchaseEdit() {
       <InvoiceEditor
         key={`${inv?.id ?? 'new'}-${suppliers.length}-${scanNo}`}
         scanned={!!scan && !inv}
+        imageInvoiceNo={!inv ? scan?.result.invoiceNo || null : null}
         printedTotal={!inv ? scan?.result.printedNetTotal ?? null : null}
         mode="purchase"
         initial={initial}
@@ -273,6 +288,7 @@ export function PurchaseView() {
         <Stat label="Paid" value={`Rs ${rs(inv.paid)}`} tone="good" />
         <Stat label="Due" value={`Rs ${rs(inv.due)}`} tone={inv.due > 0 ? 'warn' : 'default'} />
       </div>
+      <InvoiceImages kind="purchase" invoiceId={inv.id} invoiceNo={inv.invoiceNo} partyName={inv.supplierName} />
       {doc}
       <PrintPreview open={preview} onClose={() => setPreview(false)} title={inv.invoiceNo}>{doc}</PrintPreview>
       {paying && <PaymentModal partyType="supplier" partyId={inv.supplierId} defaultAmount={inv.due} reference={inv.invoiceNo} onClose={() => setPaying(false)} />}

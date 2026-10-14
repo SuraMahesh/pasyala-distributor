@@ -109,7 +109,7 @@ export function errorMessage(e: unknown) {
  */
 export function useApiMutation<TVars, TRes = unknown>(
   fn: (v: TVars) => Promise<TRes>,
-  opts: { success?: string | ((r: TRes, v: TVars) => string); onSuccess?: (r: TRes, v: TVars) => void; silentError?: boolean } = {},
+  opts: { success?: string | ((r: TRes, v: TVars) => string); onSuccess?: (r: TRes, v: TVars) => void | Promise<void>; silentError?: boolean } = {},
 ) {
   const qc = useQueryClient()
   return useMutation({
@@ -120,7 +120,7 @@ export function useApiMutation<TVars, TRes = unknown>(
       if (msg) toast.success(msg)
       const warnings = (r as { warnings?: string[] } | null)?.warnings
       warnings?.forEach((w) => toast.warning(w, { duration: 8000 }))
-      opts.onSuccess?.(r, v)
+      await opts.onSuccess?.(r, v)
     },
     onError: (e) => {
       if (!opts.silentError) toast.error(errorMessage(e), { duration: 8000 })

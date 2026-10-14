@@ -42,7 +42,9 @@ export const authEnabled = () => password().length > 0
 export function authRoutes() {
   const r = Router()
   r.get('/auth/me', (req, res) => {
-    const token = (req.headers.authorization ?? '').replace(/^Bearer /, '')
+    // <img src> cannot send a header — invoice photos may pass the login token as ?t=
+  const queryToken = req.method === 'GET' && /^\/images\/\d+\/file$/.test(req.path) && typeof req.query.t === 'string' ? req.query.t : ''
+  const token = (req.headers.authorization ?? '').replace(/^Bearer /, '') || queryToken
     res.json({ required: authEnabled(), loggedIn: !authEnabled() || verifyToken(token) })
   })
   r.post('/auth/login', async (req, res) => {

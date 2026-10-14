@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { Eye, FileSpreadsheet, Pencil, Plus, Printer, ScanLine, Trash2, Wallet } from 'lucide-react'
+import { Eye, FileSpreadsheet, Paperclip, Pencil, Plus, Printer, ScanLine, Trash2, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { qtyFmt, rs, type SalesInvoice } from '@pjd/shared'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
 import InvoiceDocument from '../components/InvoiceDocument'
+import InvoiceImages from '../components/InvoiceImages'
 import InvoiceEditor, { blankLine, emptyDraft, type Draft } from '../components/InvoiceEditor'
-import { ScanReview, ScanUpload, scanToDraft, type ScanState } from '../components/InvoiceScan'
+import { attachScanPhoto, ScanReview, ScanUpload, scanToDraft, type ScanState } from '../components/InvoiceScan'
 import PrintPreview from '../components/PrintPreview'
 import { Badge, ErrorBox, Filters, PageHeader, SearchBox, Spinner, Stat, StatusBadge } from '../components/ui'
 import { api, fetchAll } from '../lib/api'
@@ -31,16 +32,18 @@ interface SaleRow {
   status: SalesInvoice['status']
   dueDate: string
   overdue: boolean
+  imageCount: number
 }
 
 export function SalesList() {
-  const [s, set] = useListState({ from: '', to: '', status: '', typeId: '', customerId: '', sort: 'date', dir: 'desc' as const })
+  const [s, set] = useListState({ from: '', to: '', status: '', typeId: '', customerId: '', images: '', sort: 'date', dir: 'desc' as const })
   const { data: types = [] } = useCustomerTypes()
   const { data: customers = [] } = useCustomerOptions()
   const q = usePaged<SaleRow, { count: number; netTotal: number; due: number; profit: number }>('sales', '/sales', s)
 
   const columns: Column<SaleRow>[] = [
     { key: 'no', header: 'Invoice', sortKey: 'invoiceNo', render: (r) => <Link to={`/sales/${r.id}`} className="font-medium text-brand-700 hover:underline">{r.invoiceNo}</Link> },
+    { key: 'photo', header: <Paperclip size={14} aria-label="Photos" />, align: 'center', mobile: false, render: (r) => (r.imageCount ? <span className="inline-flex items-center gap-0.5 text-xs text-brand-700" title={`${r.imageCount} photo(s) of the paper invoice`}><Paperclip size={13} />{r.imageCount > 1 ? r.imageCount : ''}</span> : <span className="text-xs text-stone-300" title="No photo yet">—</span>) },
     { key: 'date', header: 'Date', sortKey: 'date', render: (r) => <span className="text-stone-500">{r.date}</span> },
     { key: 'party', header: 'Customer', sortKey: 'party', render: (r) => <span>{r.partyName}<span className="ml-1.5 text-xs text-stone-400">{r.typeName}</span></span> },
     { key: 'area', header: 'Area', hideBelow: 'xl', render: (r) => <span className="text-stone-500">{r.area}</span>, mobile: false },
@@ -86,6 +89,11 @@ export function SalesList() {
       </div>
       <Filters>
         <SearchBox value={s.search} onChange={(v) => set({ search: v })} placeholder="Invoice no, customer, area…" />
+        <select className="input" value={s.images} onChange={(e) => set({ images: e.target.value })} aria-label="Photos">
+          <option value="">Photos: all</option>
+          <option value="has">With photo</option>
+          <option value="none">Missing photo</option>
+        </select>
         <select className="input" value={s.status} onChange={(e) => set({ status: e.target.value })}>
           <option value="">All statuses</option>
           <option value="due">Unpaid / part paid</option>
@@ -170,7 +178,13 @@ export function SaleEdit() {
   const [scanNo, setScanNo] = useState(0)
   const save = useApiMutation(
     ({ body }: { body: unknown }) => (id ? api.put<{ id: number; invoiceNo: string }>(`/sales/${id}`, body) : api.post<{ id: number; invoiceNo: string }>('/sales', body)),
-    { success: (r) => `Invoice ${r.invoiceNo} saved`, onSuccess: (r) => nav(`/sales/${r.id}`, { replace: true }) },
+    {
+      success: (r) => `Invoice ${r.invoiceNo} saved`,
+      onSuccess: async (r) => {
+        if (scan?.file && !id) await attachScanPhoto('sale', r.id, r.invoiceNo, scan)
+        nav(`/sales/${r.id}`, { replace: true })
+      },
+    },
   )
 
   if (id && existing.isLoading) return <Spinner />
@@ -301,6 +315,7 @@ export function SaleView() {
         <Stat label="Gross profit" value={`Rs ${rs(profit)}`} hint={inv.netTotal ? `${((profit / inv.netTotal) * 100).toFixed(1)}% · cost Rs ${rs(inv.costTotal)}` : undefined} tone={profit < 0 ? 'bad' : 'good'} />
       </div>
       {inv.customerTypeName && <p className="no-print mb-3 text-sm text-stone-500">Customer type: <Badge tone="blue">{inv.customerTypeName}</Badge></p>}
+      <InvoiceImages kind="sale" invoiceId={inv.id} invoiceNo={inv.invoiceNo} partyName={inv.customerName} />
       {doc}
       <PrintPreview open={preview} onClose={() => setPreview(false)} title={inv.invoiceNo}>{doc}</PrintPreview>
       {paying && <PaymentModal partyType="customer" partyId={inv.customerId} defaultAmount={inv.due} reference={inv.invoiceNo} onClose={() => setPaying(false)} />}

@@ -57,6 +57,8 @@ During every deploy the build applies database migrations and, on an empty datab
 1. **Database:** Vercel → Storage → Create Database → Neon (Free, Singapore) → **Connect Project** to this
    project. That adds `DATABASE_URL` and `DATABASE_URL_UNPOOLED` automatically.
 2. **Password:** Vercel → Project → Settings → Environment Variables → add `APP_PASSWORD` (Production + Preview).
+   **Invoice photos:** Vercel → Storage → Create → **Blob** → choose **Private** → Connect Project. That adds
+   `BLOB_READ_WRITE_TOKEN`; redeploy. (Free plan: 1 GB ≈ 3,000–5,000 invoice pages.)
    For invoice scanning also add `ANTHROPIC_API_KEY` (from console.anthropic.com). Without it, scanning is
    switched off and invoices are typed in as before.
 3. Deploy, either:
@@ -139,3 +141,19 @@ products by code + size + name, fixes the invoice-number prefix from earlier inv
 discount when it cannot read one. Parser tests use real OCR output from the 5 starting invoices (`backend/src/ocr.test.ts`).
 
 Tips for good offline results: lay the page flat, fill the frame with the table, good light, no shadow across the lines.
+
+## Invoice photos
+
+Every sales and purchase invoice has an **Invoice photos** section (one or more pages). Photos are stored in a
+private Vercel Blob store (or `backend/.data/uploads` when running on your own computer) and are only served to
+logged-in users.
+
+- **Kept with the invoice:** a photo belongs to exactly one invoice (database rule) and is deleted with it.
+- **Scanned invoices** keep their photo automatically when saved, turned upright.
+- **No mix-ups:** before attaching, the screen asks you to check the invoice number on the paper; the same photo
+  (same file) cannot be attached to two invoices; when a scanned photo's invoice number differs from the number
+  you typed, saving warns you.
+- **Find gaps:** 📎 column and *Photos: missing* filter on the Sales and Purchases lists; the **Invoice photos**
+  page shows every photo (search by invoice no, supplier, customer, date) and how many invoices still have none.
+- Photos are shrunk in the browser to ~1800 px (≈200–400 KB) plus a small preview. Downloads are named
+  `HOSI005967-p1.jpg`.

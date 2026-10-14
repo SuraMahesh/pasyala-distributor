@@ -64,6 +64,7 @@ export const api = {
   post: <T>(path: string, body: unknown) => request<T>('POST', path, body),
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
   del: <T = { ok: true }>(path: string) => request<T>('DELETE', path),
+  send: <T = unknown>(method: 'PATCH' | 'PUT' | 'POST', path: string, body: unknown) => request<T>(method, path, body),
   url: (path: string) => BASE + path,
 }
 

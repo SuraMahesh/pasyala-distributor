@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto'
+import { existsSync, mkdtempSync, readdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { sql } from 'drizzle-orm'
 import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -18,7 +22,10 @@ async function product(code: string) {
   return res.body.items.find((p: { code: string }) => p.code === code)
 }
 
+const uploadDir = mkdtempSync(path.join(tmpdir(), 'pjd-uploads-'))
+
 beforeAll(async () => {
+  process.env.UPLOAD_DIR = uploadDir
   if (!process.env.TEST_DATABASE_URL) process.env.PGLITE_DIR = 'memory://'
   database = await openDatabase(process.env.TEST_DATABASE_URL)
   if (database.kind === 'postgres') {
@@ -491,5 +498,62 @@ describe('scan invoice image → draft (nothing saved until confirmed)', () => {
   it('rejects files that are too large or the wrong type', async () => {
     const scanApi = request(createApp(database.db, { scanner: async () => ({ lines: [] }) }))
     expect((await scanApi.post('/api/scan-invoice').send({ ...file, mimeType: 'text/plain' })).status).toBe(400)
+  })
+})
+
+describe('invoice photos', () => {
+  // a real (tiny) JPEG is not needed — the server stores bytes as given
+  const photo = (seed: string) => {
+    const bytes = Buffer.from(`fake-jpeg-${seed}-`.repeat(40))
+    return { mimeType: 'image/jpeg', data: bytes.toString('base64'), thumb: Buffer.from(`thumb-${seed}`.repeat(10)).toString('base64'), sha256: createHash('sha256').update(seed).digest('hex'), width: 1800, height: 2400 }
+  }
+  const files = () => readdirSync(uploadDir, { recursive: true }).filter((f) => String(f).match(/\.(jpg|png|webp)$/))
+
+  it('attaches photos to a purchase, serves them, numbers the pages', async () => {
+    const p = (await api.get('/api/purchases?search=HOSI005920')).body.items[0]
+    expect(p.imageCount).toBe(0)
+    const a = await api.post(`/api/purchases/${p.id}/images`).send(photo('5920-page1'))
+    expect(a.status).toBe(201)
+    expect(a.body).toMatchObject({ kind: 'purchase', invoiceId: p.id, invoiceNo: 'HOSI005920', page: 1 })
+    const b = await api.post(`/api/purchases/${p.id}/images`).send(photo('5920-page2'))
+    expect(b.body.page).toBe(2)
+    const file = await api.get(`/api/images/${a.body.id}/file`).buffer(true)
+    expect(file.status).toBe(200)
+    expect(file.headers['content-type']).toBe('image/jpeg')
+    expect(file.headers['content-disposition']).toMatch(/HOSI005920-p1\.jpg/)
+    expect(Buffer.from(file.body).toString()).toContain('fake-jpeg-5920-page1')
+    expect((await api.get(`/api/images/${a.body.id}/file?size=thumb`)).status).toBe(200)
+    expect((await api.get(`/api/purchases/${p.id}/images`)).body.map((i: { page: number }) => i.page)).toEqual([1, 2])
+    expect((await api.get('/api/purchases?search=HOSI005920')).body.items[0].imageCount).toBe(2)
+    // remove page 1 → page 2 becomes page 1, file gone from disk
+    const before = files().length
+    expect((await api.delete(`/api/images/${a.body.id}`)).status).toBe(200)
+    expect((await api.get(`/api/purchases/${p.id}/images`)).body).toMatchObject([{ id: b.body.id, page: 1 }])
+    expect(files().length).toBe(before - 2) // photo + small preview
+  })
+
+  it('the same photo cannot be attached to two invoices', async () => {
+    const other = (await api.get('/api/purchases?search=HOSI005927')).body.items[0]
+    const res = await api.post(`/api/purchases/${other.id}/images`).send(photo('5920-page2'))
+    expect(res.status).toBe(409)
+    expect(res.body.error).toMatch(/already attached to purchase invoice HOSI005920 \(page 1\)/)
+    const sale = (await api.get('/api/sales?pageSize=1')).body.items[0]
+    expect((await api.post(`/api/sales/${sale.id}/images`).send(photo('5920-page2'))).status).toBe(409)
+  })
+
+  it('lists invoices without photos, gallery search, photos removed with the invoice', async () => {
+    const none = (await api.get('/api/purchases?images=none&pageSize=50')).body.items.map((i: { invoiceNo: string }) => i.invoiceNo)
+    expect(none).not.toContain('HOSI005920')
+    expect((await api.get('/api/purchases?images=has')).body.items.map((i: { invoiceNo: string }) => i.invoiceNo)).toEqual(['HOSI005920'])
+    const sup = (await api.get('/api/suppliers/options')).body[0]
+    const grn = await api.post('/api/purchases').send({ supplierId: sup.id, invoiceNo: 'PHOTO-1', orderNo: '', salesPerson: '', date: today, payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [{ productId: ids.ATAB0030, qty: 1, freeQty: 0, unitPrice: 200, discPct: 0 }] })
+    await api.post(`/api/purchases/${grn.body.id}/images`).send(photo('photo-1'))
+    const gallery = (await api.get('/api/images?search=PHOTO-1')).body
+    expect(gallery.items).toMatchObject([{ invoiceNo: 'PHOTO-1', kind: 'purchase', partyName: sup.name }])
+    const before = files().length
+    expect((await api.delete(`/api/purchases/${grn.body.id}`)).status).toBe(200)
+    expect(files().length).toBe(before - 2) // photo + small preview
+    expect((await api.get('/api/images?search=PHOTO-1')).body.total).toBe(0)
+    expect(existsSync(uploadDir)).toBe(true)
   })
 })
