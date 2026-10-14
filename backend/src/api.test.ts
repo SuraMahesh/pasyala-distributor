@@ -5,6 +5,7 @@ import { addDays, invoiceTotals, todayLK } from '@pjd/shared'
 import { createApp } from './app'
 import { openDatabase, runMigrations, type Database } from './db/client'
 import { PRINTED_TOTALS, seed } from './db/seed'
+import type { RawScan } from './services/scan'
 
 // Uses TEST_DATABASE_URL (real PostgreSQL) when set, otherwise an in-memory embedded Postgres.
 let database: Database
@@ -27,7 +28,7 @@ beforeAll(async () => {
   }
   await runMigrations(database)
   await seed(database.db)
-  api = request(createApp(database.db))
+  api = request(createApp(database.db, { scanner: null }))
   const prods = (await api.get('/api/products/options')).body as { id: number; code: string }[]
   for (const p of prods) ids[p.code] = p.id
   const types = (await api.get('/api/customer-types')).body as { id: number; code: string }[]
@@ -218,7 +219,54 @@ describe('purchases and stock safety', () => {
     const list = (await api.get('/api/purchases?search=HOSI005967')).body
     const res = await api.delete(`/api/purchases/${list.items[0].id}`)
     expect(res.status).toBe(409)
-    expect(res.body.error).toMatch(/Not enough stock/)
+    expect(res.body.error).toMatch(/^Cannot delete HOSI005967 — items from it are already on sales invoices: .*PJD-\d{6}/)
+    expect(res.body.error).toMatch(/Delete or edit those sales first/)
+  })
+
+  it('delete / edit guard: refused while sold, nothing changes; allowed once stock is back', async () => {
+    const sup = (await api.get('/api/suppliers/options')).body[0]
+    const prod = await api.post('/api/products').send({ code: '', name: 'GUARD TEST OIL', size: '30ML', category: 'Thailaya (Oil)', listPrice: 100, supplierDiscPct: 0, sellPrice: 150, reorderLevel: 0, openingStock: 0, active: true })
+    const pid = prod.body.id
+    const grn = (no: string, qty: number) => api.post('/api/purchases').send({ supplierId: sup.id, invoiceNo: no, orderNo: '', salesPerson: '', date: today, payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [{ productId: pid, qty, freeQty: 0, unitPrice: 100, discPct: 0 }] })
+    const onHand = async () => (await api.get(`/api/products/${pid}`)).body.product.onHand
+    const a = await grn('GUARD-A', 10)
+    const sale = await api.post('/api/sales').send({ date: today, customerId: ids.shop, payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [{ productId: pid, qty: 6, freeQty: 0, unitPrice: 150, discPct: 0 }] })
+    expect(sale.status).toBe(201)
+    expect(await onHand()).toBe(4)
+
+    // delete refused: 6 of its 10 are sold
+    const del = await api.delete(`/api/purchases/${a.body.id}`)
+    expect(del.status).toBe(409)
+    expect(del.body.error).toBe(`Cannot delete GUARD-A — items from it are already on sales invoices: 30ML GUARD TEST OIL (6 of 10 used — ${sale.body.invoiceNo}). Delete or edit those sales first.`)
+    const usage = (await api.get(`/api/purchases/${a.body.id}/usage`)).body
+    expect(usage).toMatchObject({ used: true, items: [{ productId: pid, received: 10, used: 6, usedBy: [{ kind: 'sale', id: sale.body.id, ref: sale.body.invoiceNo, qty: 6 }] }] })
+
+    // restocking does NOT make it deletable: the sale still came out of GUARD-A (oldest stock first)
+    const b = await grn('GUARD-B', 10)
+    expect(await onHand()).toBe(14)
+    expect((await api.delete(`/api/purchases/${a.body.id}`)).status).toBe(409)
+    // the newer invoice was not touched by any sale → can be deleted
+    expect((await api.get(`/api/purchases/${b.body.id}/usage`)).body.used).toBe(false)
+    expect((await api.delete(`/api/purchases/${b.body.id}`)).status).toBe(200)
+    expect(await onHand()).toBe(4)
+    // edit down to 3 refused too (6 sold)
+    const edit = await api.put(`/api/purchases/${a.body.id}`).send({ supplierId: sup.id, invoiceNo: 'GUARD-A', orderNo: '', salesPerson: '', date: today, payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [{ productId: pid, qty: 3, freeQty: 0, unitPrice: 100, discPct: 0 }] })
+    expect(edit.status).toBe(409)
+    expect(edit.body.error).toMatch(/^Cannot reduce these items on GUARD-A — .*6 of 10 used/)
+    // …and nothing changed
+    expect(await onHand()).toBe(4)
+    expect((await api.get(`/api/purchases/${a.body.id}`)).body.lines[0].qty).toBe(10)
+    // edit down to 6 is fine (exactly what was sold)
+    const edit6 = await api.put(`/api/purchases/${a.body.id}`).send({ supplierId: sup.id, invoiceNo: 'GUARD-A', orderNo: '', salesPerson: '', date: today, payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [{ productId: pid, qty: 6, freeQty: 0, unitPrice: 100, discPct: 0 }] })
+    expect(edit6.status).toBe(200)
+    expect(await onHand()).toBe(0)
+
+    // once the sale is deleted, the goods are back and the purchase can be deleted
+    expect((await api.delete(`/api/sales/${sale.body.id}`)).status).toBe(200)
+    expect(await onHand()).toBe(6)
+    expect((await api.delete(`/api/purchases/${a.body.id}`)).status).toBe(200)
+    expect(await onHand()).toBe(0)
+    expect((await api.delete(`/api/products/${pid}`)).status).toBe(200)
   })
 
   it('adjustments cannot take stock below zero; deleting reverses them', async () => {
@@ -375,5 +423,73 @@ describe('stock amount = unit price − discount, free items at 0', () => {
     await api.delete(`/api/sales/${sale.body.id}`)
     await api.delete(`/api/purchases/${grn.body.id}`)
     expect(await product('THMN0030')).toMatchObject({ listPrice: 200, supplierDiscPct: 22, paidOnHand: 96 })
+  })
+})
+
+describe('scan invoice image → draft (nothing saved until confirmed)', () => {
+  const file = { kind: 'purchase', mimeType: 'image/jpeg', data: 'x'.repeat(200) }
+
+  it('without an API key the AI reader is off (the browser reads offline instead)', async () => {
+    expect((await api.get('/api/scan-invoice/status')).body).toEqual({ enabled: true, ai: false })
+    const res = await api.post('/api/scan-invoice').send(file)
+    expect(res.status).toBe(503)
+    expect(res.body.error).toMatch(/ANTHROPIC_API_KEY/)
+  })
+
+  it('matches products by code, AI id or name+size, the supplier by name, and flags problems', async () => {
+    let seen: { catalog: number; parties: number } | null = null
+    const raw: RawScan = {
+      invoiceNo: 'HOSI005920', // already entered → duplicate warning
+      date: '2026-10-05',
+      partyName: 'Pasyale Ayurveda Osu Pvt Ltd',
+      billDiscPct: 8,
+      printedNetTotal: 99999,
+      lines: [
+        { code: 'thmn0030', description: 'MAHA NARAYANA THEL', size: '30ML', qty: 12, freeQty: 1, unitPrice: 200, discPct: 22, lineTotal: 1872 },
+        { productId: ids.ATAB0030, description: 'ABA THEL', size: '30 ml', qty: 6, freeQty: 0, unitPrice: 200, discPct: 22, lineTotal: 936 },
+        { description: 'Kohomba Thel', size: '30ML', qty: 3, unitPrice: 200, discPct: 22, lineTotal: 500 },
+        { description: 'Unknown Oil', size: '30ML', qty: 2, unitPrice: 100 },
+      ],
+    }
+    const scanApi = request(createApp(database.db, {
+      scanner: async ({ catalog, parties }) => {
+        seen = { catalog: catalog.length, parties: parties.length }
+        return raw
+      },
+    }))
+    const res = await scanApi.post('/api/scan-invoice').send(file)
+    expect(res.status).toBe(200)
+    expect(seen!.catalog).toBeGreaterThan(40)
+    const r = res.body
+    expect(r.partyId).toBeTruthy()
+    expect(r.lines.map((l: { productId: number | null; matchedBy: string | null }) => [l.productId, l.matchedBy])).toEqual([
+      [ids.THMN0030, 'code'], [ids.ATAB0030, 'ai'], [ids.ATNE0030, 'name'], [null, null],
+    ])
+    expect(r.lines[0]).toMatchObject({ qty: 12, freeQty: 1, unitPrice: 200, discPct: 22 })
+    const w = r.warnings.join('\n')
+    expect(w).toMatch(/already entered/)
+    expect(w).toMatch(/Unknown Oil.*not found/)
+    expect(w).toMatch(/Line 3 .*invoice shows 500/)
+    expect(w).toMatch(/invoice shows Rs 99999.00/)
+
+    // nothing was saved by scanning
+    expect((await api.get('/api/purchases?pageSize=50')).body.total).toBe(5)
+  })
+
+  it('offline path: checks lines the browser read, and saves nothing', async () => {
+    const res = await api.post('/api/scan-invoice/parse').send({
+      kind: 'purchase',
+      raw: { invoiceNo: 'HOS1006300', date: '2026-10-13', partyName: '???', billDiscPct: null, lines: [{ productId: ids.ATAB0030, size: '300ML', qty: 12, freeQty: 1, unitPrice: 200, discPct: 22, lineTotal: 1872 }] },
+    })
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ invoiceNo: 'HOSI006300', billDiscPct: 8 })
+    expect(res.body.partyId).toBeTruthy() // the only supplier
+    expect(res.body.lines[0]).toMatchObject({ productId: ids.ATAB0030, qty: 12, freeQty: 1 })
+    expect((await api.get('/api/purchases?pageSize=50')).body.total).toBe(5)
+  })
+
+  it('rejects files that are too large or the wrong type', async () => {
+    const scanApi = request(createApp(database.db, { scanner: async () => ({ lines: [] }) }))
+    expect((await scanApi.post('/api/scan-invoice').send({ ...file, mimeType: 'text/plain' })).status).toBe(400)
   })
 })

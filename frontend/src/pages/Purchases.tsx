@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { Eye, FileSpreadsheet, Pencil, Plus, Printer, Trash2, Wallet } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { rs, type PurchaseInvoice } from '@pjd/shared'
+import { Eye, FileSpreadsheet, Lock, Pencil, Plus, Printer, ScanLine, Trash2, Wallet } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Link, useInRouterContext, useNavigate, useParams } from 'react-router-dom'
+import { rs, type PurchaseInvoice, type PurchaseUsage } from '@pjd/shared'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
 import InvoiceDocument from '../components/InvoiceDocument'
 import InvoiceEditor, { blankLine, emptyDraft, type Draft } from '../components/InvoiceEditor'
+import { ScanReview, ScanUpload, scanToDraft, type ScanState } from '../components/InvoiceScan'
 import PrintPreview from '../components/PrintPreview'
 import { ErrorBox, Filters, PageHeader, SearchBox, Spinner, Stat, StatusBadge } from '../components/ui'
 import { api, fetchAll } from '../lib/api'
@@ -62,6 +63,7 @@ export function PurchaseList() {
                 totals: [5, 6, 7, 8, 9],
               }])
             }}><FileSpreadsheet size={16} /> Excel</button>
+            <Link to="/purchases/new" className="btn-secondary"><ScanLine size={16} /> Scan invoice image</Link>
             <Link to="/purchases/new" className="btn-primary"><Plus size={16} /> Enter supplier invoice</Link>
           </>
         }
@@ -156,6 +158,9 @@ export function PurchaseEdit() {
   const nav = useNavigate()
   const existing = useQuery({ queryKey: ['purchases', id], queryFn: () => api.get<PurchaseInvoice>(`/purchases/${id}`), enabled: !!id })
   const { data: suppliers = [] } = useSupplierOptions()
+  const [scan, setScan] = useState<ScanState | null>(null)
+  const [scanNo, setScanNo] = useState(0)
+  const usage = useQuery({ queryKey: ['purchases', id, 'usage'], queryFn: () => api.get<PurchaseUsage>(`/purchases/${id}/usage`), enabled: !!id })
   const save = useApiMutation(
     ({ body }: { body: unknown }) => (id ? api.put<{ id: number; invoiceNo: string }>(`/purchases/${id}`, body) : api.post<{ id: number; invoiceNo: string }>('/purchases', body)),
     { success: (r) => `Purchase ${r.invoiceNo} saved — stock updated`, onSuccess: (r) => nav(`/purchases/${r.id}`, { replace: true }) },
@@ -163,12 +168,26 @@ export function PurchaseEdit() {
   if (id && existing.isLoading) return <Spinner />
   if (id && existing.error) return <ErrorBox error={existing.error} />
   const inv = existing.data
-  const initial = inv ? toDraft(inv) : { ...emptyDraft('purchase'), partyId: suppliers.length === 1 ? suppliers[0].id : null }
+  const base = inv ? toDraft(inv) : { ...emptyDraft('purchase'), partyId: suppliers.length === 1 ? suppliers[0].id : null }
+  const initial = scan && !inv ? scanToDraft(scan.result, base) : base
+  const onScanned = (s: ScanState) => { setScan(s); setScanNo((n) => n + 1) }
   return (
     <div>
-      <PageHeader title={inv ? `Edit ${inv.invoiceNo}` : 'Enter supplier invoice'} subtitle="Copy the lines from the supplier's paper invoice — free items go in the Free column" back={{ to: inv ? `/purchases/${inv.id}` : '/purchases', label: inv ? inv.invoiceNo : 'Purchases' }} />
+      <PageHeader title={inv ? `Edit ${inv.invoiceNo}` : 'Enter supplier invoice'} subtitle={scan ? 'Compare every line with the invoice image, fix anything that is wrong, then save' : "Scan the paper invoice, or copy the lines by hand — free items go in the Free column"} back={{ to: inv ? `/purchases/${inv.id}` : '/purchases', label: inv ? inv.invoiceNo : 'Purchases' }} />
+      {inv && usage.data?.used && (
+        <div className="mb-4 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <Lock size={18} className="mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-medium">Some items are already sold — their qty (incl. free) cannot go below what was sold:</p>
+            <UsageList usage={usage.data} />
+          </div>
+        </div>
+      )}
+      {!inv && (scan ? <ScanReview scan={scan} kind="purchase" onScanned={onScanned} onClear={() => { setScan(null); setScanNo((n) => n + 1) }} /> : <ScanUpload kind="purchase" onScanned={onScanned} />)}
       <InvoiceEditor
-        key={`${inv?.id ?? 'new'}-${suppliers.length}`}
+        key={`${inv?.id ?? 'new'}-${suppliers.length}-${scanNo}`}
+        scanned={!!scan && !inv}
+        printedTotal={!inv ? scan?.result.printedNetTotal ?? null : null}
         mode="purchase"
         initial={initial}
         submitting={save.isPending}
@@ -197,6 +216,23 @@ export function PurchaseView() {
   const [preview, setPreview] = useState(false)
   const [paying, setPaying] = useState(false)
   const del = useApiMutation(() => api.del(`/purchases/${id}`), { success: 'Purchase deleted — stock reduced', onSuccess: () => nav('/purchases', { replace: true }) })
+  const usage = useQuery({ queryKey: ['purchases', id, 'usage'], queryFn: () => api.get<PurchaseUsage>(`/purchases/${id}/usage`) })
+  const askDelete = async () => {
+    if (!inv) return
+    const u = usage.data ?? (await usage.refetch()).data
+    if (u?.used) {
+      await confirm({
+        title: `${inv.invoiceNo} cannot be deleted`,
+        tone: 'warning',
+        alertOnly: true,
+        confirmText: 'OK',
+        message: 'Items from this invoice are already on sales invoices. Delete or edit those sales first — then this invoice can be deleted.',
+        details: <UsageList usage={u} />,
+      })
+      return
+    }
+    if (await confirm({ title: `Delete ${inv.invoiceNo}?`, message: 'All items on this invoice are removed from stock. None of them has been sold yet.', confirmText: 'Delete purchase', tone: 'danger' })) del.mutate(undefined)
+  }
   const inv = q.data
   const doc = useMemo(() => inv && <PurchaseDoc inv={inv} paid={inv.paid} />, [inv])
   if (q.isLoading) return <Spinner />
@@ -211,9 +247,8 @@ export function PurchaseView() {
           <>
             <button
               className="btn-danger"
-              onClick={async () =>
-                (await confirm({ title: `Delete ${inv.invoiceNo}?`, message: 'All items on this invoice are removed from stock. Not allowed if they were already sold.', confirmText: 'Delete purchase', tone: 'danger' })) && del.mutate(undefined)
-              }
+              onClick={askDelete}
+              title={usage.data?.used ? 'Items from this invoice were already sold' : undefined}
             >
               <Trash2 size={15} /> Delete
             </button>
@@ -224,6 +259,15 @@ export function PurchaseView() {
           </>
         }
       />
+      {usage.data?.used && (
+        <div className="no-print mb-4 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <Lock size={18} className="mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-medium">Items from this invoice are already sold — it cannot be deleted, and these items cannot be reduced below what was sold.</p>
+            <UsageList usage={usage.data} />
+          </div>
+        </div>
+      )}
       <div className="no-print mb-4 grid grid-cols-3 gap-3">
         <Stat label="Net total" value={`Rs ${rs(inv.netTotal)}`} />
         <Stat label="Paid" value={`Rs ${rs(inv.paid)}`} tone="good" />
@@ -233,5 +277,30 @@ export function PurchaseView() {
       <PrintPreview open={preview} onClose={() => setPreview(false)} title={inv.invoiceNo}>{doc}</PrintPreview>
       {paying && <PaymentModal partyType="supplier" partyId={inv.supplierId} defaultAmount={inv.due} reference={inv.invoiceNo} onClose={() => setPaying(false)} />}
     </div>
+  )
+}
+
+/** Link that also works inside dialogs (they are drawn outside the page router). */
+function AnyLink({ to, className, children }: { to: string; className?: string; children: ReactNode }) {
+  return useInRouterContext() ? <Link to={to} className={className}>{children}</Link> : <a href={to} className={className}>{children}</a>
+}
+
+/** Which sales took goods from this purchase invoice. */
+function UsageList({ usage }: { usage: PurchaseUsage }) {
+  return (
+    <ul className="mt-1.5 space-y-1">
+      {usage.items.filter((i) => i.used > 0).map((i) => (
+        <li key={i.productId}>
+          <span className="font-medium">{i.label}</span> — {i.used} of {i.received} sold:{' '}
+          {i.usedBy.map((s, k) => (
+            <span key={`${s.kind}-${s.id}`}>
+              {k > 0 && ', '}
+              {s.kind === 'sale' ? <AnyLink to={`/sales/${s.id}`} className="font-medium text-brand-700 underline">{s.ref}</AnyLink> : <AnyLink to="/stock?tab=adjustments" className="underline">{s.ref} adjustment</AnyLink>}
+              <span className="text-stone-500"> ({s.qty}{s.party ? `, ${s.party}` : ''})</span>
+            </span>
+          ))}
+        </li>
+      ))}
+    </ul>
   )
 }

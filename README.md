@@ -57,6 +57,8 @@ During every deploy the build applies database migrations and, on an empty datab
 1. **Database:** Vercel → Storage → Create Database → Neon (Free, Singapore) → **Connect Project** to this
    project. That adds `DATABASE_URL` and `DATABASE_URL_UNPOOLED` automatically.
 2. **Password:** Vercel → Project → Settings → Environment Variables → add `APP_PASSWORD` (Production + Preview).
+   For invoice scanning also add `ANTHROPIC_API_KEY` (from console.anthropic.com). Without it, scanning is
+   switched off and invoices are typed in as before.
 3. Deploy, either:
    - **GitHub:** push this folder to a private repo → Vercel → Add New → Project → Import. Leave the build
      settings as they are (they come from `vercel.json`).
@@ -115,3 +117,25 @@ All lists are paginated on the server (10/25/50/100 per page), sortable, searcha
 `sales`, `sales/:id`, `purchases`, `purchases/:id`, `payments`, `adjustments`,
 `reports/summary|by-product|by-customer|by-type|daily|aging`, `dashboard`, `alerts`, `settings`, `export`.
 List endpoints accept `page`, `pageSize`, `search`, `sort`, `dir` and return `{ items, total, page, pageSize, summary }`.
+
+## Scanning invoice images
+
+**Sales → New** and **Purchases → New** have a *Scan invoice* box: take a photo (phone) or upload one. Nothing is saved
+until you press Save and confirm — the normal invoice form is filled in, with the image, anything unmatched and any
+total that does not add up listed at the top. Fix what is wrong, then save.
+
+Two readers:
+
+| | Offline (default, free) | AI (optional) |
+|---|---|---|
+| Needs | nothing | `ANTHROPIC_API_KEY` on the server |
+| Where it runs | in the browser (Tesseract OCR, ~7 MB downloaded once, files served from `/ocr`) | Claude on the server |
+| Cost | free | a few US cents per scan |
+| Handles | clear photos of printed invoices, any rotation, yellow highlighter | also creased / handwritten / PDF |
+
+The offline reader is tuned for the supplier's layout (`CODE  SIZE NAME  QTY  PRICE  DISC%  AMOUNT`, free items as
+0.00 lines). It fixes common OCR mix-ups (O/0, S/5, I/1), checks every line against qty × price − disc = amount, matches
+products by code + size + name, fixes the invoice-number prefix from earlier invoices, and uses the supplier's last bill
+discount when it cannot read one. Parser tests use real OCR output from the 5 starting invoices (`backend/src/ocr.test.ts`).
+
+Tips for good offline results: lay the page flat, fill the frame with the table, good light, no shadow across the lines.

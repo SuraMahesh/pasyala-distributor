@@ -30,4 +30,6 @@ backend/dist
 
 # vercel
 .vercel
-.env*
+
+# offline OCR engine (copied from node_modules at build)
+frontend/public/ocr

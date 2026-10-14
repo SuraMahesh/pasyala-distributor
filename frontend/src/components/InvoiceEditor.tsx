@@ -30,6 +30,8 @@ export interface DraftLine {
   /** user typed free qty — don't auto apply promotions */
   manualFree?: boolean
   priceNote?: string
+  /** line read from an invoice image — the text as printed, so the user can check / pick the product */
+  imageText?: string
 }
 
 export interface Draft {
@@ -93,6 +95,8 @@ export default function InvoiceEditor({
   previousOutstanding = 0,
   invoiceNoPreview,
   renderPreview,
+  scanned = false,
+  printedTotal = null,
 }: {
   mode: 'sale' | 'purchase'
   initial: Draft
@@ -105,6 +109,10 @@ export default function InvoiceEditor({
   previousOutstanding?: number
   invoiceNoPreview?: string
   renderPreview: (d: Draft, paid: number) => ReactNode
+  /** the draft was filled from an invoice image — ask the user to check it */
+  scanned?: boolean
+  /** net total printed on the scanned invoice, to compare with the lines */
+  printedTotal?: number | null
 }) {
   const confirm = useConfirm()
   const { data: products = [] } = useProductOptions()
@@ -112,7 +120,7 @@ export default function InvoiceEditor({
   const { data: suppliers = [] } = useSupplierOptions()
   const { data: ctx } = usePricingContext()
   const [d, setD] = useState<Draft>(initial)
-  const isEditing = initial.lines.some((l) => l.productId)
+  const isEditing = !scanned && initial.lines.some((l) => l.productId)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [preview, setPreview] = useState(false)
   const [done, setDone] = useState(false)
@@ -120,7 +128,7 @@ export default function InvoiceEditor({
   const dirty = !done && JSON.stringify(d) !== initialJson
 
   const pmap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
-  const customer = customers.find((c) => c.id === d.partyId)
+  const customer = mode === 'sale' ? customers.find((c) => c.id === d.partyId) : undefined
   const partyList = mode === 'sale' ? customers.filter((c) => c.active || c.id === d.partyId) : suppliers.filter((s) => s.active || s.id === d.partyId)
 
   // leave-page guard
@@ -154,6 +162,7 @@ export default function InvoiceEditor({
         return p && l.qty > 0 && (lineNet(l) * billFactor) / (l.qty + l.freeQty) + 0.005 < p.avgCost
       })
     : []
+  const totalOff = printedTotal != null && validLines.length > 0 && Math.abs(t.netTotal - printedTotal) > 1
   const projected = customer ? customer.balance - previousOutstanding + (t.netTotal - paid) : 0
   const overLimit = mode === 'sale' && customer && customer.creditLimit > 0 && projected > customer.creditLimit
 
@@ -185,6 +194,7 @@ export default function InvoiceEditor({
     if (mode === 'purchase' && !d.invoiceNo.trim()) e.invoiceNo = 'Enter the supplier invoice number'
     if (!validLines.length) e.lines = 'Add at least one item'
     d.lines.forEach((l, i) => {
+      if (!l.productId && l.imageText) e[`line${l.key}`] = `Line ${i + 1}: choose the product for "${l.imageText}" or delete the line`
       if (l.productId && l.qty + l.freeQty <= 0) e[`line${l.key}`] = `Line ${i + 1}: qty must be more than 0`
       if (l.discPct < 0 || l.discPct > 100) e[`line${l.key}`] = `Line ${i + 1}: discount must be 0–100`
     })
@@ -204,9 +214,10 @@ export default function InvoiceEditor({
       ...(shortages.length ? [`Not enough stock for ${shortages.length} item(s) — the server will refuse unless negative stock is allowed in Settings.`] : []),
       ...(overLimit ? [`${customer!.name} will be over the credit limit (Rs ${rs(projected)} of Rs ${rs(customer!.creditLimit)}).`] : []),
       ...(belowCost.length ? [`${belowCost.length} item(s) priced below cost.`] : []),
+      ...(totalOff ? [`Lines add up to Rs ${rs(t.netTotal)} but the image shows Rs ${rs(printedTotal!)}.`] : []),
     ]
     const ok = await confirm({
-      title: initial.lines.some((l) => l.productId) ? 'Save changes to this invoice?' : mode === 'sale' ? 'Create this sales invoice?' : 'Save this supplier invoice?',
+      title: isEditing ? 'Save changes to this invoice?' : scanned ? 'Save invoice read from image?'  : mode === 'sale' ? 'Create this sales invoice?' : 'Save this supplier invoice?',
       tone: warnings.length ? 'warning' : 'primary',
       confirmText: 'Save invoice',
       message: (
@@ -322,12 +333,12 @@ export default function InvoiceEditor({
                     <Combobox
                       items={products.filter((x) => x.active || x.id === l.productId)}
                       value={l.productId}
-                      onChange={(id) => setLine(l.key, { productId: id, manualPrice: false, manualFree: false }, true)}
+                      onChange={(id) => setLine(l.key, l.imageText ? { productId: id } : { productId: id, manualPrice: false, manualFree: false }, true)}
                       getId={(x) => x.id}
                       getLabel={productLabel}
                       getSearch={(x) => `${x.code} ${x.size} ${x.name}`}
                       placeholder="Search code or name…"
-                      autoFocus={i > 0 && i === d.lines.length - 1 && !l.productId}
+                      autoFocus={i > 0 && i === d.lines.length - 1 && !l.productId && !l.imageText}
                       renderItem={(x) => (
                         <div className="flex items-center justify-between gap-3">
                           <span className="min-w-0 truncate"><span className="font-medium">{productLabel(x)}</span> <span className="text-xs text-stone-400">{x.code}</span></span>
@@ -351,10 +362,11 @@ export default function InvoiceEditor({
                     <span className="font-semibold tabular-nums">{rs(lineNet(l))}</span>
                   </div>
                 </div>
-                {(p || err) && (
+                {(p || err || l.imageText) && (
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 md:pl-9">
                     {p && <span className="font-mono">{p.code}</span>}
                     {mode === 'sale' && p && <span className={`md:hidden ${short ? 'font-semibold text-red-600' : ''}`}>Stock {avail}</span>}
+                    {l.imageText && <span className={l.productId ? 'text-sky-700' : 'font-medium text-amber-700'}>{l.productId ? 'Image:' : 'Not matched — image says:'} “{l.imageText}”</span>}
                     {l.priceNote && <span>{l.priceNote}</span>}
                     {l.freeQty > 0 && !l.manualFree && mode === 'sale' && <span className="inline-flex items-center gap-1 text-brand-700"><Gift size={12} /> promotion</span>}
                     {short && <span className="font-medium text-red-600">only {avail} in stock</span>}
@@ -384,6 +396,8 @@ export default function InvoiceEditor({
           )}
           {overLimit && <Warn>{customer!.name} will owe Rs {rs(projected)}, over the credit limit of Rs {rs(customer!.creditLimit)}.</Warn>}
           {belowCost.length > 0 && <Warn>{belowCost.length} item(s) are priced below what you paid for them.</Warn>}
+          {totalOff && <Warn>Lines add up to Rs {rs(t.netTotal)} but the invoice image shows Rs {rs(printedTotal!)} — check qty, prices and discounts.</Warn>}
+          {printedTotal != null && !totalOff && validLines.length > 0 && <p className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm text-brand-800">✓ Net total matches the invoice image (Rs {rs(printedTotal)}).</p>}
         </div>
         <div className="card hidden space-y-2 p-4 text-sm lg:block">
           <Totals t={t} d={d} paid={paid} set={set} paidError={errors.paid} />

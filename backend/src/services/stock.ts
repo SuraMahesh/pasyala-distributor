@@ -92,9 +92,13 @@ export async function allowNegativeStock(ex: Executor) {
  * Throws 409 listing every item that would go below zero, unless negative stock is allowed in settings.
  * Must be called inside the same transaction, before the write.
  */
-export async function assertStockAvailable(ex: Executor, deltas: Map<number, number>) {
-  const ids = [...deltas.entries()].filter(([, d]) => d < 0).map(([id]) => id)
+export async function assertStockAvailable(ex: Executor, deltas: Map<number, number>, action?: string) {
+  const ids = [...deltas.entries()].filter(([, d]) => d < 0).map(([id]) => id).sort((x, y) => x - y)
   if (!ids.length || (await allowNegativeStock(ex))) return
+  // Lock these products until the transaction ends, so two changes at the same moment (a sale and a
+  // purchase delete, two sales…) are checked one after the other — never both against the same stock.
+  // Sorted ids keep the lock order the same everywhere (no deadlocks).
+  await lockProducts(ex, ids)
   const stock = await stockMap(ex, ids)
   const short = ids
     .map((id) => {
@@ -104,14 +108,24 @@ export async function assertStockAvailable(ex: Executor, deltas: Map<number, num
     })
     .filter((x) => x.after < 0)
   if (short.length) {
+    const list = short.map((s) => `${s.label} has ${s.onHand}, needs ${s.onHand - s.after}`).join('; ')
     throw conflict(
-      `Not enough stock: ${short.map((s) => `${s.label} has ${s.onHand}, needs ${s.onHand - s.after}`).join('; ')}`,
+      action
+        ? `Cannot ${action} — those goods were already sold or used. Not enough stock: ${list}. Delete or change the sales first, or add the stock back.`
+        : `Not enough stock: ${list}`,
       { short },
     )
   }
 }
 
 /** Sum qty+free per product for a set of lines (positive numbers). */
+/** Lock products (in id order, so no deadlocks) until the transaction ends. */
+export async function lockProducts(ex: Executor, productIds: number[]) {
+  const ids = [...new Set(productIds)].sort((x, y) => x - y)
+  if (!ids.length) return
+  await ex.execute(sql`select id from products where id in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)}) order by id for update`)
+}
+
 export function unitsByProduct(lines: { productId: number; qty: number; freeQty: number }[]) {
   const m = new Map<number, number>()
   for (const l of lines) m.set(l.productId, (m.get(l.productId) ?? 0) + l.qty + l.freeQty)

@@ -287,3 +287,66 @@ export interface PricingContext {
   rules: PriceRule[]
   promotions: Promotion[]
 }
+
+// ---------------- invoice scanning (photo / PDF → draft invoice)
+
+export type ScanKind = 'sale' | 'purchase'
+
+export interface ScannedLine {
+  /** matched product, or null when the line could not be matched — the user picks it */
+  productId: number | null
+  /** text as printed on the invoice (item code / name / size) */
+  rawText: string
+  matchedBy: 'ai' | 'code' | 'name' | null
+  qty: number
+  freeQty: number
+  unitPrice: number
+  discPct: number
+  /** line total printed on the invoice (for checking) */
+  printedLineTotal: number | null
+}
+
+export interface ScanResult {
+  kind: ScanKind
+  invoiceNo: string
+  date: string | null
+  /** matched supplier / customer, or null */
+  partyId: number | null
+  partyName: string
+  orderNo: string
+  salesPerson: string
+  payMethod: PayMethod | null
+  billDiscPct: number
+  printedNetTotal: number | null
+  lines: ScannedLine[]
+  /** things the user should check before saving */
+  warnings: string[]
+}
+
+// ---------------- which sales used a purchase invoice's stock (FIFO — oldest stock is sold first)
+
+export interface PurchaseUsageSale {
+  kind: 'sale' | 'adjustment'
+  id: number
+  ref: string
+  date: string
+  party: string
+  qty: number
+}
+
+export interface PurchaseUsageItem {
+  productId: number
+  label: string
+  /** units this invoice brought in (incl. free) */
+  received: number
+  /** of those, units already sold / used */
+  used: number
+  usedBy: PurchaseUsageSale[]
+}
+
+export interface PurchaseUsage {
+  purchaseId: number
+  invoiceNo: string
+  used: boolean
+  items: PurchaseUsageItem[]
+}

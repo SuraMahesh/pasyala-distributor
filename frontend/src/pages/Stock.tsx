@@ -78,7 +78,8 @@ function StockTable({ s, set }: { s: ListState[0]; set: ListState[1] }) {
   }
 
   const columns: Column<ProductWithStock>[] = [
-    { key: 'item', header: 'Item', sortKey: 'name', render: (p) => <Link to={`/products/${p.id}`} className="font-medium hover:underline" title={p.code}><span className="text-stone-500">{p.size}</span> {p.name}</Link> },
+    { key: 'item', header: 'Item', sortKey: 'name', render: (p) => <Link to={`/products/${p.id}`} className="font-medium hover:underline" ><span className="text-stone-500">{p.size}</span> {p.name}</Link> },
+    { key: 'code', header: 'Item code', sortKey: 'code', render: (p) => <span className="font-mono text-xs text-stone-600">{p.code}</span>, mobile: false },
     {
       key: 'qty', header: 'Total qty', sortKey: 'onHand', align: 'right',
       render: (p) => (
@@ -139,6 +140,7 @@ function StockTable({ s, set }: { s: ListState[0]; set: ListState[1] }) {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate font-medium"><span className="text-stone-500">{p.size}</span> {p.name}</p>
+              <p className="font-mono text-[11px] text-stone-500">{p.code}</p>
               <p className="text-xs text-stone-500">{p.listPrice > 0 ? `Rs ${rs(p.listPrice)}` : 'Free'} · disc {discLabel(p)}{freeQty(p) ? ` · ${chargedQty(p)} + ${freeQty(p)} free` : ''}</p>
               <p className="text-xs font-medium text-stone-700">Amount Rs {rs(n(p.stockValue))}</p>
             </div>

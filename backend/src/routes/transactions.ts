@@ -25,6 +25,7 @@ import { paginate } from '../lib/list'
 import { customerDues, supplierDues } from '../services/dues'
 import { deletePurchase, deleteSale, getPurchase, getSale, savePurchase, saveSale } from '../services/invoices'
 import { assertStockAvailable } from '../services/stock'
+import { purchaseUsage } from '../services/usage'
 
 const dateRange = {
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('').transform(() => undefined)),
@@ -42,6 +43,10 @@ const invoiceSorters = {
 
 export function transactionRoutes(db: DB) {
   const r = Router()
+
+  r.get('/purchases/:id/usage', async (req, res) => {
+    res.json(await purchaseUsage(db, idParam(req.params.id)))
+  })
 
   // ---------------- sales
   r.get('/sales', async (req, res) => {
@@ -213,7 +218,7 @@ export function transactionRoutes(db: DB) {
     await db.transaction(async (tx) => {
       const [a] = await tx.select().from(stockAdjustments).where(eq(stockAdjustments.id, id)).for('update')
       if (!a) throw notFound('Adjustment')
-      await assertStockAvailable(tx, new Map([[a.productId, -a.qty]]))
+      await assertStockAvailable(tx, new Map([[a.productId, -a.qty]]), 'remove this adjustment')
       await tx.delete(stockAdjustments).where(eq(stockAdjustments.id, id))
     })
     res.json({ ok: true })

@@ -12,15 +12,17 @@ import { errorHandler } from './errors'
 import { catalogRoutes } from './routes/catalog'
 import { insightRoutes } from './routes/insights'
 import { partyRoutes } from './routes/parties'
+import { scanRoutes } from './routes/scan'
 import { transactionRoutes } from './routes/transactions'
+import type { InvoiceScanner } from './services/scan'
 
-export function createApp(db: DB, opts: { log?: boolean; staticDir?: string; corsOrigin?: string } = {}) {
+export function createApp(db: DB, opts: { log?: boolean; staticDir?: string; corsOrigin?: string; scanner?: InvoiceScanner | null } = {}) {
   const app = express()
   app.disable('x-powered-by')
   app.use(helmet({ contentSecurityPolicy: false }))
   app.use(compression())
   app.use(cors({ origin: opts.corsOrigin ?? process.env.CORS_ORIGIN ?? true }))
-  app.use(express.json({ limit: '2mb' }))
+  app.use(express.json({ limit: '6mb' }))
   if (opts.log) app.use(morgan('dev'))
 
   const api = express.Router()
@@ -33,6 +35,7 @@ export function createApp(db: DB, opts: { log?: boolean; staticDir?: string; cor
   api.use(partyRoutes(db))
   api.use(transactionRoutes(db))
   api.use(insightRoutes(db))
+  api.use(opts.scanner === undefined ? scanRoutes(db) : scanRoutes(db, opts.scanner))
   api.use((_req, res) => {
     res.status(404).json({ error: 'API route not found' })
   })

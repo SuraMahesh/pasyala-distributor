@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { FileSpreadsheet, Pencil, Percent, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CATEGORIES, rs, suggestProductCode, type Movement, type Paged, type PriceQuote, type Product, type ProductWithStock, type Promotion, type CustomerType } from '@pjd/shared'
 import { useConfirm } from '../components/Confirm'
-import { DataTable, type Column } from '../components/DataTable'
-import { Badge, ErrorBox, Field, Filters, Modal, NumberInput, PageHeader, SearchBox, Spinner, Stat, StockBadge } from '../components/ui'
+import { ClientTable, DataTable, type Column } from '../components/DataTable'
+import { Badge, ErrorBox, Field, Filters, Modal, NumberInput, PageHeader, SearchBox, Spinner, Stat } from '../components/ui'
 import { api, fetchAll } from '../lib/api'
 import { downloadExcel } from '../lib/excel'
-import { useApiMutation, useListState, usePaged } from '../lib/hooks'
+import { useApiMutation, useListState } from '../lib/hooks'
 
 const SIZES = ['4.5L', '1L', '750ML', '375ML', '180ML', '100ML', '30ML', '1kg', '100g', '50g', '30g']
 
@@ -16,38 +16,97 @@ export function useProductMeta() {
   return useQuery({ queryKey: ['products', 'meta'], queryFn: () => api.get<{ categories: string[]; sizes: string[] }>('/products/meta') })
 }
 
+/** ml/g size → number for sorting variants small → large */
+const sizeNum = (sz: string) => {
+  const m = sz.match(/([\d.]+)\s*(l|ml|kg|g)/i)
+  if (!m) return 0
+  const v = parseFloat(m[1])
+  return /^(l|kg)$/i.test(m[2]) ? v * 1000 : v
+}
+
+interface ProductGroup {
+  key: string
+  name: string
+  category: string
+  variants: ProductWithStock[]
+  stock: number
+  amount: number
+}
+
+function groupProducts(list: ProductWithStock[]): ProductGroup[] {
+  const map = new Map<string, ProductGroup>()
+  for (const p of list) {
+    const key = p.name.trim().toUpperCase()
+    const g = map.get(key) ?? { key, name: p.name.trim(), category: p.category, variants: [], stock: 0, amount: 0 }
+    g.variants.push(p)
+    g.stock += Math.max(p.onHand, 0)
+    g.amount += p.stockValue ?? 0
+    map.set(key, g)
+  }
+  const groups = [...map.values()]
+  for (const g of groups) g.variants.sort((a, b) => sizeNum(a.size) - sizeNum(b.size))
+  return groups.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function VariantChip({ p }: { p: ProductWithStock }) {
+  const low = p.onHand <= 0 ? 'bg-red-50 text-red-700 ring-red-200' : p.onHand <= p.reorderLevel ? 'bg-amber-50 text-amber-800 ring-amber-200' : 'bg-white text-stone-700 ring-stone-200'
+  return (
+    <Link
+      to={`/products/${p.id}`}
+      onClick={(e) => e.stopPropagation()}
+      title={`${p.size} ${p.name} · stock code ${p.code}`}
+      className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ring-1 hover:ring-brand-400 ${low} ${p.active ? '' : 'opacity-50'}`}
+    >
+      <span className="font-semibold text-stone-900">{p.size}</span>
+      <span className="tabular-nums">{p.sellPrice > 0 ? `Rs ${rs(p.sellPrice)}` : 'Free'}</span>
+      <span className="tabular-nums text-stone-500">· {p.onHand} pcs</span>
+    </Link>
+  )
+}
+
 export default function Products() {
   const [s, set] = useListState({ category: '', size: '', status: '', stock: '', sort: 'name', dir: 'asc' as const })
-  const q = usePaged<ProductWithStock>('products', '/products', s)
+  const filters = { search: s.search, category: s.category, size: s.size, status: s.status }
+  const q = useQuery({ queryKey: ['products', 'all', filters], queryFn: () => fetchAll<ProductWithStock>('/products', filters) })
+  const groups = useMemo(() => groupProducts(q.data ?? []), [q.data])
   const { data: meta } = useProductMeta()
   const [editing, setEditing] = useState<Product | null>(null)
   const [bulk, setBulk] = useState(false)
 
-  const columns: Column<ProductWithStock>[] = [
-    { key: 'item', header: 'Item', sortKey: 'name', render: (p) => <Link to={`/products/${p.id}`} className="font-medium hover:text-brand-700 hover:underline"><span className="text-stone-500">{p.size}</span> {p.name}{!p.active && <Badge>inactive</Badge>}</Link> },
-    { key: 'code', header: 'Code', sortKey: 'code', render: (p) => <span className="font-mono text-xs text-stone-500">{p.code}</span> },
-    { key: 'cat', header: 'Category', sortKey: 'category', hideBelow: 'xl', render: (p) => <span className="text-stone-500">{p.category}</span>, mobile: false },
-    { key: 'list', header: 'Unit price', sortKey: 'listPrice', align: 'right', render: (p) => (p.listPrice === 0 ? <Badge tone="green">Free</Badge> : rs(p.listPrice)) },
-    { key: 'disc', header: 'Disc %', sortKey: 'supplierDiscPct', align: 'right', hideBelow: 'lg', render: (p) => <span className="text-stone-500">{p.supplierDiscPct ? `${p.supplierDiscPct}%` : '—'}</span> },
-    { key: 'sell', header: 'Sell price', sortKey: 'sellPrice', align: 'right', render: (p) => <span className="font-medium">{rs(p.sellPrice)}</span> },
-    { key: 'stock', header: 'Stock', sortKey: 'onHand', align: 'right', render: (p) => <StockBadge onHand={p.onHand} reorderLevel={p.reorderLevel} /> },
-    { key: 'amount', header: 'Stock amount', sortKey: 'stockValue', align: 'right', hideBelow: 'lg', render: (p) => <span className="tabular-nums">{rs(p.stockValue)}</span> },
-    { key: 'edit', header: '', align: 'right', mobile: false, render: (p) => <button className="btn-ghost" onClick={() => setEditing(p)} aria-label="Edit"><Pencil size={15} /></button> },
+  const columns: Column<ProductGroup>[] = [
+    {
+      key: 'product', header: 'Product', sortKey: 'name', sortValue: (g) => g.name,
+      render: (g) => (
+        <div className="min-w-[12rem]">
+          <p className="font-medium text-stone-900">{g.name}</p>
+          <p className="text-xs text-stone-500">{g.category} · {g.variants.length} {g.variants.length === 1 ? 'variant' : 'variants'}</p>
+        </div>
+      ),
+    },
+    { key: 'variants', header: 'Variants (size · selling price · stock)', render: (g) => <div className="flex flex-wrap gap-1.5">{g.variants.map((v) => <VariantChip key={v.id} p={v} />)}</div> },
+    { key: 'stock', header: 'Total stock', sortKey: 'stock', sortValue: (g) => g.stock, align: 'right', render: (g) => <span className="font-medium tabular-nums">{g.stock}</span> },
+    { key: 'amount', header: 'Stock amount', sortKey: 'amount', sortValue: (g) => g.amount, align: 'right', hideBelow: 'lg', render: (g) => <span className="tabular-nums">{rs(g.amount)}</span> },
+    {
+      key: 'add', header: '', align: 'right', mobile: false,
+      render: (g) => <button className="btn-ghost whitespace-nowrap text-xs" onClick={() => setEditing({ ...newProduct(), name: g.name, category: g.category as Product['category'], size: '' })}><Plus size={14} /> Variant</button>,
+    },
   ]
+
+  const variantCount = q.data?.length ?? 0
 
   return (
     <div>
       <PageHeader
         title="Products"
-        subtitle="Unit price = supplier price before discount · unit price 0 = free item · stock amount is after discount"
+        subtitle={`${groups.length} products · ${variantCount} variants (sizes). Tap a size to see its stock, prices and history.`}
         actions={
           <>
             <button className="btn-secondary" onClick={async () => {
-              const all = await fetchAll<ProductWithStock>('/products', { ...s, page: undefined, pageSize: undefined })
+              const all = q.data ?? []
               await downloadExcel('products', [{
                 name: 'Products',
-                columns: [{ header: 'Code' }, { header: 'Size' }, { header: 'Name' }, { header: 'Category' }, { header: 'Unit price', type: 'money' }, { header: 'Discount %', type: 'pct' }, { header: 'Selling price', type: 'money' }, { header: 'On hand', type: 'int' }, { header: 'Free qty', type: 'int' }, { header: 'Stock amount (after discount)', type: 'money' }, { header: 'Reorder level', type: 'int' }, { header: 'Active' }],
-                rows: all.map((p) => [p.code, p.size, p.name, p.category, p.listPrice, p.supplierDiscPct, p.sellPrice, p.onHand, p.freeOnHand, p.stockValue, p.reorderLevel, p.active]),
+                columns: [{ header: 'Product' }, { header: 'Variant (size)' }, { header: 'Category' }, { header: 'Unit price', type: 'money' }, { header: 'Discount %', type: 'pct' }, { header: 'Selling price', type: 'money' }, { header: 'Stock', type: 'int' }, { header: 'Free qty', type: 'int' }, { header: 'Stock amount', type: 'money' }, { header: 'Reorder level', type: 'int' }, { header: 'Active' }, { header: 'Stock code' }],
+                rows: groupProducts(all).flatMap((g) => g.variants.map((p) => [g.name, p.size, p.category, p.listPrice, p.supplierDiscPct, p.sellPrice, p.onHand, p.freeOnHand, p.stockValue, p.reorderLevel, p.active, p.code])),
               }])
             }}><FileSpreadsheet size={16} /> Excel</button>
             <button className="btn-secondary" onClick={() => setBulk(true)}><Percent size={16} /> Bulk price change</button>
@@ -56,7 +115,7 @@ export default function Products() {
         }
       />
       <Filters>
-        <SearchBox value={s.search} onChange={(v) => set({ search: v })} placeholder="Code, name, size…" />
+        <SearchBox value={s.search} onChange={(v) => set({ search: v })} placeholder="Product name…" />
         <select className="input" value={s.category} onChange={(e) => set({ category: e.target.value })}>
           <option value="">All categories</option>
           {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
@@ -71,38 +130,32 @@ export default function Products() {
           <option value="inactive">Inactive only</option>
         </select>
       </Filters>
-      <DataTable
-        rows={q.data?.items ?? []}
-        columns={columns}
-        rowKey={(p) => p.id}
-        loading={q.isFetching}
-        error={q.error}
-        page={q.data?.page ?? 1}
-        pageSize={s.pageSize}
-        total={q.data?.total ?? 0}
-        onPage={(p) => set({ page: p }, false)}
-        onPageSize={(n) => set({ pageSize: n })}
-        sort={s.sort}
-        dir={s.dir}
-        onSort={(k, d) => set({ sort: k, dir: d })}
-        rowLink={(p) => `/products/${p.id}`}
-        rowClassName={(p) => (p.active ? '' : 'opacity-60')}
-        empty="No products match."
-        mobileCard={(p) => (
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate font-medium"><span className="text-stone-500">{p.size}</span> {p.name}</p>
-              <p className="text-xs text-stone-500"><span className="font-mono">{p.code}</span> · unit {p.listPrice === 0 ? 'Free' : rs(p.listPrice)} · stock Rs {rs(p.stockValue)}</p>
+      {q.isLoading ? <Spinner /> : (
+        <ClientTable
+          rows={groups}
+          columns={columns}
+          rowKey={(g) => g.key}
+          loading={q.isFetching}
+          error={q.error}
+          initialPageSize={25}
+          initialSort={{ key: 'name', dir: 'asc' }}
+          empty="No products match."
+          mobileCard={(g) => (
+            <div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-medium">{g.name}</p>
+                  <p className="text-xs text-stone-500">{g.category} · stock {g.stock} · Rs {rs(g.amount)}</p>
+                </div>
+                <button className="btn-ghost shrink-0 text-xs" onClick={() => setEditing({ ...newProduct(), name: g.name, category: g.category as Product['category'], size: '' })}><Plus size={14} /> Variant</button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">{g.variants.map((v) => <VariantChip key={v.id} p={v} />)}</div>
             </div>
-            <div className="shrink-0 text-right">
-              <p className="font-semibold tabular-nums">{rs(p.sellPrice)}</p>
-              <StockBadge onHand={p.onHand} reorderLevel={p.reorderLevel} />
-            </div>
-          </div>
-        )}
-      />
+          )}
+        />
+      )}
       {editing && <ProductForm product={editing} onClose={() => setEditing(null)} />}
-      {bulk && <BulkPrice filters={s} total={q.data?.total ?? 0} onClose={() => setBulk(false)} />}
+      {bulk && <BulkPrice filters={s} total={variantCount} onClose={() => setBulk(false)} />}
     </div>
   )
 }
@@ -115,7 +168,7 @@ export function ProductForm({ product, onClose }: { product: Product; onClose: (
   const [err, setErr] = useState('')
   const confirm = useConfirm()
   const save = useApiMutation((body: Product) => (isNew ? api.post<Product>('/products', body) : api.put<Product>(`/products/${product.id}`, body)), {
-    success: (r) => (isNew ? `Product added — item code ${r.code}` : 'Product saved'),
+    success: (r) => (isNew ? `${r.size} ${r.name} added — stock code ${r.code}` : 'Product saved'),
     onSuccess: onClose,
     silentError: true,
   })
@@ -134,7 +187,7 @@ export function ProductForm({ product, onClose }: { product: Product; onClose: (
   return (
     <Modal
       open
-      title={isNew ? 'Add product' : `Edit ${product.size} ${product.name}`}
+      title={isNew ? (product.name ? `Add a variant (size) to ${product.name}` : 'Add product') : `Edit ${product.size} ${product.name}`}
       onClose={onClose}
       footer={
         <>
@@ -152,14 +205,14 @@ export function ProductForm({ product, onClose }: { product: Product; onClose: (
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Product name *" className="sm:col-span-2"><input className="input uppercase" autoFocus={isNew} value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} placeholder="MAHA NARAYANA" /></Field>
-        <Field label="Size *">
-          <input className="input" list="sizes" value={p.size} onChange={(e) => setP({ ...p, size: e.target.value })} />
+        <Field label="Product name *" className="sm:col-span-2"><input className="input uppercase" autoFocus={isNew && !product.name} value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} placeholder="MAHA NARAYANA" /></Field>
+        <Field label="Variant (size) *">
+          <input className="input" list="sizes" autoFocus={isNew && !!product.name} placeholder="30ML, 750ML, 100g…" value={p.size} onChange={(e) => setP({ ...p, size: e.target.value })} />
           <datalist id="sizes">{SIZES.map((x) => <option key={x} value={x} />)}</datalist>
         </Field>
-        <Field label="Item code" hint={isNew ? 'Created automatically from name, size and category' : 'Item codes cannot be changed'}>
+        <Field label="Stock code" hint={isNew ? 'Created automatically from name, size and category' : 'Stock codes cannot be changed'}>
           <div className="input flex items-center bg-stone-50 font-mono text-stone-600 select-all">
-            {isNew ? (p.name.trim() ? suggestProductCode(p.name, p.size, p.category) : '—') : p.code}
+            {isNew ? (p.name.trim() && p.size.trim() ? suggestProductCode(p.name, p.size, p.category) : '—') : p.code}
           </div>
         </Field>
         <Field label="Category">
@@ -259,7 +312,7 @@ export function ProductDetail() {
       <PageHeader
         back={{ to: '/products', label: 'Products' }}
         title={`${p.size} ${p.name}`}
-        subtitle={`${p.code} · ${p.category}${p.active ? '' : ' · inactive'}`}
+        subtitle={`${p.category} · stock code ${p.code}${p.active ? '' : ' · inactive'}`}
         actions={<button className="btn-secondary" onClick={() => setEdit(true)}><Pencil size={15} /> Edit</button>}
       />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

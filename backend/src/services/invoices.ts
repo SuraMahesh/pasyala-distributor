@@ -25,7 +25,8 @@ import {
 } from '../db/schema'
 import { badRequest, conflict, notFound } from '../errors'
 import { customerDues, supplierDues } from './dues'
-import { assertStockAvailable, mergeDeltas, stockMap, unitsByProduct } from './stock'
+import { assertStockAvailable, lockProducts, mergeDeltas, stockMap, unitsByProduct } from './stock'
+import { purchaseUsage, usageMessage } from './usage'
 
 export interface SaveResult {
   id: number
@@ -210,8 +211,16 @@ export async function savePurchase(db: DB, input: PurchaseInvoiceInput, id?: num
 
     const oldLines = existing ? await tx.select().from(purchaseLines).where(eq(purchaseLines.invoiceId, existing.id)) : []
     await checkProducts(tx, input.lines, new Set(oldLines.map((l) => l.productId)))
+    if (existing) {
+      // editing: a product may not go below what was already sold out of this invoice
+      await lockProducts(tx, [...oldLines, ...input.lines].map((l) => l.productId))
+      const usage = await purchaseUsage(tx, existing.id)
+      const newQty = unitsByProduct(input.lines)
+      const short = usage.items.filter((i) => i.used > (newQty.get(i.productId) ?? 0))
+      if (short.length) throw conflict(usageMessage({ ...usage, items: short }, 'reduce'), { usage })
+    }
     // removing/reducing a purchase takes stock away — make sure it was not already sold
-    await assertStockAvailable(tx, mergeDeltas([unitsByProduct(input.lines), 1], [unitsByProduct(oldLines), -1]))
+    await assertStockAvailable(tx, mergeDeltas([unitsByProduct(input.lines), 1], [unitsByProduct(oldLines), -1]), existing ? 'reduce this purchase' : undefined)
 
     const totals = invoiceTotals(input.lines, input.billDiscPct)
     if (input.paidOnInvoice > totals.netTotal + 0.004) {
@@ -281,7 +290,11 @@ export async function deletePurchase(db: DB, id: number) {
     const [inv] = await tx.select({ id: purchaseInvoices.id }).from(purchaseInvoices).where(eq(purchaseInvoices.id, id)).for('update')
     if (!inv) throw notFound('Purchase invoice')
     const old = await tx.select().from(purchaseLines).where(eq(purchaseLines.invoiceId, id))
-    await assertStockAvailable(tx, mergeDeltas([unitsByProduct(old), -1]))
+    await lockProducts(tx, old.map((l) => l.productId))
+    // any of its goods already sold → keep the invoice (the sales depend on it)
+    const usage = await purchaseUsage(tx, id)
+    if (usage.used) throw conflict(usageMessage(usage, 'delete'), { usage })
+    await assertStockAvailable(tx, mergeDeltas([unitsByProduct(old), -1]), 'delete this purchase')
     await tx.delete(purchaseInvoices).where(eq(purchaseInvoices.id, id))
     await rememberLatestPurchasePrices(tx, old.map((l) => l.productId))
   })

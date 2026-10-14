@@ -9,6 +9,8 @@ export interface ConfirmOptions {
   confirmText?: string
   cancelText?: string
   tone?: 'danger' | 'primary' | 'warning'
+  /** just a notice — one button, no cancel */
+  alertOnly?: boolean
 }
 
 type ConfirmFn = (o: ConfirmOptions) => Promise<boolean>
@@ -48,7 +50,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         size="sm"
         footer={
           <>
-            <button className="btn-secondary" onClick={() => close(false)}>{opts?.cancelText ?? 'Cancel'}</button>
+            {!opts?.alertOnly && <button className="btn-secondary" onClick={() => close(false)}>{opts?.cancelText ?? 'Cancel'}</button>}
             <button
               autoFocus
               className={tone === 'danger' ? 'btn bg-red-600 text-white hover:bg-red-700' : 'btn-primary'}

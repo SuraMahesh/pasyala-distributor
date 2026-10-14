@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Eye, FileSpreadsheet, Pencil, Plus, Printer, Trash2, Wallet } from 'lucide-react'
+import { Eye, FileSpreadsheet, Pencil, Plus, Printer, ScanLine, Trash2, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { qtyFmt, rs, type SalesInvoice } from '@pjd/shared'
@@ -7,6 +7,7 @@ import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
 import InvoiceDocument from '../components/InvoiceDocument'
 import InvoiceEditor, { blankLine, emptyDraft, type Draft } from '../components/InvoiceEditor'
+import { ScanReview, ScanUpload, scanToDraft, type ScanState } from '../components/InvoiceScan'
 import PrintPreview from '../components/PrintPreview'
 import { Badge, ErrorBox, Filters, PageHeader, SearchBox, Spinner, Stat, StatusBadge } from '../components/ui'
 import { api, fetchAll } from '../lib/api'
@@ -72,6 +73,7 @@ export function SalesList() {
         actions={
           <>
             <button className="btn-secondary" onClick={exportExcel}><FileSpreadsheet size={16} /> Excel</button>
+            <Link to="/sales/new" className="btn-secondary"><ScanLine size={16} /> Scan invoice image</Link>
             <Link to="/sales/new" className="btn-primary"><Plus size={16} /> New sale</Link>
           </>
         }
@@ -164,6 +166,8 @@ export function SaleEdit() {
   const existing = useQuery({ queryKey: ['sales', id], queryFn: () => api.get<SalesInvoice>(`/sales/${id}`), enabled: !!id })
   const { data: settings } = useSettings()
   const { data: customers = [] } = useCustomerOptions()
+  const [scan, setScan] = useState<ScanState | null>(null)
+  const [scanNo, setScanNo] = useState(0)
   const save = useApiMutation(
     ({ body }: { body: unknown }) => (id ? api.put<{ id: number; invoiceNo: string }>(`/sales/${id}`, body) : api.post<{ id: number; invoiceNo: string }>('/sales', body)),
     { success: (r) => `Invoice ${r.invoiceNo} saved`, onSuccess: (r) => nav(`/sales/${r.id}`, { replace: true }) },
@@ -173,16 +177,20 @@ export function SaleEdit() {
   if (id && existing.error) return <ErrorBox error={existing.error} />
   const inv = existing.data
   const invoiceNo = inv?.invoiceNo ?? `${settings?.invoicePrefix ?? ''}${String(settings?.nextInvoiceNo ?? 1).padStart(6, '0')}`
+  const onScanned = (s: ScanState) => { setScan(s); setScanNo((n) => n + 1) }
   const ownQty = new Map<number, number>()
   inv?.lines.forEach((l) => ownQty.set(l.productId, (ownQty.get(l.productId) ?? 0) + l.qty + l.freeQty))
 
   return (
     <div>
       <PageHeader title={inv ? `Edit ${inv.invoiceNo}` : 'New sales invoice'} subtitle={inv ? `${inv.customerName} · ${inv.date}` : 'Prices fill in from the customer type, product price rules and promotions'} back={{ to: inv ? `/sales/${inv.id}` : '/sales', label: inv ? inv.invoiceNo : 'Sales' }} />
+      {!inv && (scan ? <ScanReview scan={scan} kind="sale" onScanned={onScanned} onClear={() => { setScan(null); setScanNo((n) => n + 1) }} /> : <ScanUpload kind="sale" onScanned={onScanned} />)}
       <InvoiceEditor
-        key={inv?.id ?? 'new'}
+        key={`${inv?.id ?? 'new'}-${scanNo}`}
         mode="sale"
-        initial={inv ? toDraft(inv) : { ...emptyDraft('sale'), partyId: presetCustomer }}
+        initial={inv ? toDraft(inv) : scan ? scanToDraft(scan.result, { ...emptyDraft('sale'), partyId: presetCustomer }) : { ...emptyDraft('sale'), partyId: presetCustomer }}
+        scanned={!!scan && !inv}
+        printedTotal={!inv ? scan?.result.printedNetTotal ?? null : null}
         ownQty={ownQty}
         previousOutstanding={inv ? inv.netTotal - inv.paidOnInvoice : 0}
         submitting={save.isPending}
