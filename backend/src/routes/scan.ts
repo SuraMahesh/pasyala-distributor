@@ -44,7 +44,7 @@ export function scanRoutes(db: DB, scanner: InvoiceScanner | null = defaultScann
   })
 
   r.post('/scan-invoice', async (req, res) => {
-    if (!scanner) throw new AppError(503, 'Invoice scanning is not set up. Add ANTHROPIC_API_KEY to the server settings (Vercel → Settings → Environment Variables) and redeploy.')
+    if (!scanner) throw new AppError(503, 'AI invoice scanning is off. Set SCAN_API_KEY on the server to turn it on — until then invoices are read on this device.')
     const file = parse(scanInvoiceSchema, req.body)
     const { catalog, parties, existing, lastBillDisc } = await context(file.kind)
     let raw

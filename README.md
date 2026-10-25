@@ -65,8 +65,8 @@ During every deploy the build applies database migrations and, on an empty datab
 2. **Password:** Vercel → Project → Settings → Environment Variables → add `APP_PASSWORD` (Production + Preview).
    **Invoice photos:** Vercel → Storage → Create → **Blob** → choose **Private** → Connect Project. That adds
    `BLOB_READ_WRITE_TOKEN`; redeploy. (Free plan: 1 GB ≈ 3,000–5,000 invoice pages.)
-   For invoice scanning also add `ANTHROPIC_API_KEY` (from console.anthropic.com). Without it, scanning is
-   switched off and invoices are typed in as before.
+   For the Assistant page add `ANTHROPIC_API_KEY` (or an OpenRouter key, see below). AI invoice scanning is a separate,
+   optional `SCAN_API_KEY`; without it invoices are read on the device with the built-in offline OCR.
 3. Deploy, either:
    - **GitHub:** push this folder to a private repo → Vercel → Add New → Project → Import. Leave the build
      settings as they are (they come from `vercel.json`).
@@ -76,14 +76,16 @@ Changing `APP_PASSWORD` later logs everyone out. Redeploy after changing environ
 
 ### AI features with a free OpenRouter key (instead of a paid Anthropic key)
 
-Invoice scanning and the Assistant use the Anthropic SDK. OpenRouter offers an Anthropic-compatible endpoint, so the
-same code can run on OpenRouter's **free** models — set, in `backend/.env` (or Vercel → Environment Variables):
+The Assistant (and optional AI invoice scanning) use the Anthropic SDK. OpenRouter offers an Anthropic-compatible
+endpoint, so the same code can run on OpenRouter's **free** models — set, in `backend/.env` (or Vercel → Environment Variables):
 
 ```bash
-ANTHROPIC_API_KEY=sk-or-v1-…                        # your OpenRouter key (openrouter.ai/settings/keys)
+ANTHROPIC_API_KEY=sk-or-v1-…                        # your OpenRouter key (openrouter.ai/settings/keys) — the Assistant
 ANTHROPIC_BASE_URL=https://openrouter.ai/api        # send requests to OpenRouter, not api.anthropic.com
 ASSISTANT_MODEL=nvidia/nemotron-3.5-super-vl:free   # any free model that supports tools
-ANTHROPIC_MODEL=nvidia/nemotron-3.5-super-vl:free   # for scanning: a free model with tools AND image input
+# optional AI invoice scanning (otherwise invoices are read on the device with the offline OCR):
+# SCAN_API_KEY=sk-or-v1-…                           # may be the same key
+# ANTHROPIC_MODEL=nvidia/nemotron-3.5-super-vl:free # for scanning: a free model with tools AND image input
 ```
 
 Restart the server after changing these. Free models are slower and less accurate than Claude, and OpenRouter
@@ -153,7 +155,7 @@ Two readers:
 
 | | Offline (default, free) | AI (optional) |
 |---|---|---|
-| Needs | nothing | `ANTHROPIC_API_KEY` on the server |
+| Needs | nothing | `SCAN_API_KEY` on the server (separate from the Assistant's key) |
 | Where it runs | in the browser (Tesseract OCR, ~7 MB downloaded once, files served from `/ocr`) | Claude on the server |
 | Cost | free | a few US cents per scan |
 | Handles | clear photos of printed invoices, any rotation, yellow highlighter | also creased / handwritten / PDF |
@@ -209,7 +211,7 @@ logged-in users.
 Every number comes from the same functions as the screens (`productsWithStock`, `customerDues`, `services/reports.ts` …), so the assistant
 can never disagree with the Stock, Customers or Reports pages. The model never calculates stock or balances itself.
 
-Needs `ANTHROPIC_API_KEY` (same key as scanning; `ASSISTANT_MODEL` optional, default `claude-opus-5-5`). The assistant **cannot change the ERP**:
+Needs `ANTHROPIC_API_KEY` (`ASSISTANT_MODEL` optional, default `claude-opus-5-5`; invoice scanning has its own `SCAN_API_KEY`). The assistant **cannot change the ERP**:
 asking it to fix a count creates a **pending request**; the owner approves or rejects it on the same page with `OWNER_PIN`, and only then is a
 stock adjustment posted (visible under Stock → Adjustments with the request number). For anything else it points to the right page.
 Code: `backend/src/services/assistant.ts` (tools + prompt), `assistant-data.ts` (reads), `assistant-approvals.ts` (owner approval),

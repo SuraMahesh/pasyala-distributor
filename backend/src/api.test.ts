@@ -479,7 +479,7 @@ describe('scan invoice image → draft (nothing saved until confirmed)', () => {
     expect((await api.get('/api/scan-invoice/status')).body).toEqual({ enabled: true, ai: false })
     const res = await api.post('/api/scan-invoice').send(file)
     expect(res.status).toBe(503)
-    expect(res.body.error).toMatch(/ANTHROPIC_API_KEY/)
+    expect(res.body.error).toMatch(/SCAN_API_KEY/)
   })
 
   it('matches products by code, AI id or name+size, the supplier by name, and flags problems', async () => {
@@ -720,5 +720,23 @@ describe('UAT fixes: customers, payments, rounding', () => {
     expect(inv.lines[0].unitPrice).toBe(1.01)
     expect(inv.netTotal).toBe(3.03) // 3 × 1.01, the same figure the printed document recomputes
     expect((await api.delete(`/api/sales/${r.body.id}`)).status).toBe(200)
+  })
+})
+
+describe('scanning key is separate from the assistant key', () => {
+  it('ANTHROPIC_API_KEY alone leaves AI scanning off; SCAN_API_KEY turns it on', async () => {
+    const prev = { a: process.env.ANTHROPIC_API_KEY, s: process.env.SCAN_API_KEY }
+    try {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-assistant-only'
+      delete process.env.SCAN_API_KEY
+      expect((await request(createApp(database.db)).get('/api/scan-invoice/status')).body).toEqual({ enabled: true, ai: false })
+      process.env.SCAN_API_KEY = 'sk-ant-scan-key'
+      expect((await request(createApp(database.db)).get('/api/scan-invoice/status')).body).toEqual({ enabled: true, ai: true })
+    } finally {
+      if (prev.a === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = prev.a
+      if (prev.s === undefined) delete process.env.SCAN_API_KEY
+      else process.env.SCAN_API_KEY = prev.s
+    }
   })
 })

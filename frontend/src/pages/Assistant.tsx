@@ -134,7 +134,7 @@ export default function Assistant() {
       {statusError && <div className="mb-4"><ErrorBox title="Could not reach the server" error="The assistant's status could not be loaded." onRetry={() => void loadStatus()} /></div>}
       {status && !status.enabled && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          The assistant is switched off: set <code>ANTHROPIC_API_KEY</code> on the server (the same key as invoice scanning).
+          The assistant is switched off: set <code>ANTHROPIC_API_KEY</code> on the server.
         </p>
       )}
       <div className="mb-3 flex items-center gap-2">

@@ -58,7 +58,7 @@ export function assistantRoutes(db: DB) {
   const key = process.env.ANTHROPIC_API_KEY
   const client = key ? new Anthropic({ apiKey: key }) : null // base URL: ANTHROPIC_BASE_URL (read by the SDK), default api.anthropic.com
   const mismatch = key ? keyMismatch(key) : null
-  if (mismatch) console.warn(`[assistant] ${mismatch} The assistant and invoice scanning will fail until this is fixed.`)
+  if (mismatch) console.warn(`[assistant] ${mismatch} The assistant will fail until this is fixed.`)
 
   r.get('/assistant/status', (_req, res) => {
     res.json({ enabled: !!client, approvals: !!process.env.OWNER_PIN, provider: llmProvider(), model: process.env.ASSISTANT_MODEL || defaultAssistantModel() })

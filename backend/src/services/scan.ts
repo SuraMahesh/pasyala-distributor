@@ -100,8 +100,9 @@ function claudeScanner(apiKey: string, model = process.env.ANTHROPIC_MODEL || de
   }
 }
 
+/** AI invoice scanning has its own key (SCAN_API_KEY). Without it the browser reads invoices with the offline OCR. */
 export function defaultScanner(): InvoiceScanner | null {
-  const key = process.env.ANTHROPIC_API_KEY
+  const key = process.env.SCAN_API_KEY
   return key ? claudeScanner(key) : null
 }
 
