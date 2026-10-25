@@ -22,6 +22,20 @@
       "when": 1791956356330,
       "tag": "0002_image_rotation",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792847044157,
+      "tag": "0003_assistant_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792917707967,
+      "tag": "0004_auth_secret",
+      "breakpoints": true
     }
   ]
 }

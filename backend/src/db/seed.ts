@@ -96,7 +96,7 @@ export const PRINTED_TOTALS: Record<string, { sub: number; net: number }> = {
   HOSI005967: { sub: 450964.8, net: 414887.62 },
 }
 
-export const SEED_TYPES = [
+const SEED_TYPES = [
   { code: 'SHOP', name: 'Shop / Retailer', defaultDiscPct: 0, creditDays: 30, sort: 1 },
   { code: 'MEDICAL', name: 'Medical Center / Clinic', defaultDiscPct: 0, creditDays: 30, sort: 2 },
   { code: 'PHARMACY', name: 'Pharmacy', defaultDiscPct: 0, creditDays: 30, sort: 3 },

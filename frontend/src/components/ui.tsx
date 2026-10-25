@@ -8,7 +8,7 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
   return (
     <div className="no-print mb-4 md:mb-5">
       {back && (
-        <Link to={back.to} className="mb-2 inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-800">
+        <Link to={back.to} className="mb-1 inline-flex min-h-8 items-center gap-1 text-sm text-stone-500 hover:text-stone-800">
           ← {back.label}
         </Link>
       )}
@@ -38,7 +38,7 @@ export function Stat({ label, value, hint, tone = 'default', icon, to }: {
         <p className="truncate text-[11px] font-medium tracking-wide text-stone-500 uppercase md:text-xs">{label}</p>
         {icon && <span className="shrink-0 text-stone-400">{icon}</span>}
       </div>
-      <p className={`mt-1.5 truncate text-lg font-semibold tabular-nums md:text-2xl ${toneCls}`}>{value}</p>
+      <p className={`mt-1.5 truncate text-base font-semibold tabular-nums sm:text-lg md:text-2xl ${toneCls}`}>{value}</p>
       {hint && <p className="mt-0.5 truncate text-xs text-stone-500">{hint}</p>}
     </>
   )
@@ -141,10 +141,10 @@ export function Spinner({ label = 'Loading…' }: { label?: string }) {
   )
 }
 
-export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorBox({ error, onRetry, title = 'Could not load this page' }: { error: unknown; onRetry?: () => void; title?: string }) {
   return (
     <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-      <p className="font-medium">Could not load this page</p>
+      <p className="font-medium">{title}</p>
       <p className="mt-1">{error instanceof Error ? error.message : String(error)}</p>
       {onRetry && <button className="btn-secondary mt-3" onClick={onRetry}>Try again</button>}
     </div>
@@ -181,7 +181,7 @@ export function Tabs<T extends string>({ value, onChange, tabs }: { value: T; on
           <button
             key={t.key}
             onClick={() => onChange(t.key)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition ${value === t.key ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'}`}
+            className={`rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition ${value === t.key ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'}`}
           >
             {t.label}
           </button>
@@ -192,7 +192,7 @@ export function Tabs<T extends string>({ value, onChange, tabs }: { value: T; on
 }
 
 export function Filters({ children }: { children: ReactNode }) {
-  return <div className="no-print mb-3 flex flex-wrap items-center gap-2 [&_select]:w-auto [&_select]:min-w-0 [&_select]:flex-1 sm:[&_select]:flex-none">{children}</div>
+  return <div className="no-print mb-3 flex flex-wrap items-center gap-2 [&_select]:w-auto [&_select]:min-w-[calc(50%-0.25rem)] [&_select]:flex-1 sm:[&_select]:min-w-0 sm:[&_select]:flex-none">{children}</div>
 }
 
 /** Number input that allows clearing the field while typing. */
@@ -224,6 +224,15 @@ export function NumberInput({ value, onChange, className = '', min, max, step, .
       className={`input text-right tabular-nums ${className}`}
       value={text}
       onFocus={(e) => e.target.select()}
+      onBlur={() => {
+        // "-3" typed into a qty box: clamp to min/max and show the value that is really used
+        const n = text === '' ? null : Number(text)
+        const clamped = n == null || Number.isNaN(n) ? null : Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n))
+        if (clamped !== n) {
+          setText(clamped == null ? '' : String(clamped))
+          onChange(clamped)
+        } else if (clamped !== value) setText(value == null ? '' : String(value))
+      }}
       onChange={(e) => {
         setText(e.target.value)
         onChange(e.target.value === '' ? null : Number(e.target.value))

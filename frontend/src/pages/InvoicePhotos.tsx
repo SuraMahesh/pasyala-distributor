@@ -39,8 +39,8 @@ export default function InvoicePhotos() {
       )}
       {missing.data && (missing.data.sales > 0 || missing.data.purchases > 0) && (
         <div className="mb-4 flex flex-wrap gap-2 text-sm">
-          {missing.data.purchases > 0 && <Link to="/purchases?images=none" className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-900 hover:bg-amber-100">{missing.data.purchases} purchase invoice{missing.data.purchases > 1 ? 's' : ''} without a photo →</Link>}
-          {missing.data.sales > 0 && <Link to="/sales?images=none" className="rounded-full border border-stone-200 bg-white px-3 py-1 text-stone-700 hover:bg-stone-50">{missing.data.sales} sales invoice{missing.data.sales > 1 ? 's' : ''} without a photo →</Link>}
+          {missing.data.purchases > 0 && <Link to="/purchases?images=none" className="inline-flex min-h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-900 hover:bg-amber-100">{missing.data.purchases} purchase invoice{missing.data.purchases > 1 ? 's' : ''} without a photo →</Link>}
+          {missing.data.sales > 0 && <Link to="/sales?images=none" className="inline-flex min-h-8 items-center rounded-full border border-stone-200 bg-white px-3 py-1 text-stone-700 hover:bg-stone-50">{missing.data.sales} sales invoice{missing.data.sales > 1 ? 's' : ''} without a photo →</Link>}
         </div>
       )}
       <Filters>

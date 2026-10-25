@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { FileSpreadsheet } from 'lucide-react'
-import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { addDays, rs, todayLK } from '@pjd/shared'
 import { ClientTable } from '../components/DataTable'
-import { Badge, Filters, PageHeader, Spinner, Stat, Tabs } from '../components/ui'
+import { Badge, ErrorBox, Filters, PageHeader, Spinner, Stat, Tabs } from '../components/ui'
 import { api } from '../lib/api'
 import { downloadExcel, type XSheet } from '../lib/excel'
 
@@ -32,16 +32,24 @@ const money = (k: keyof Profit) => ({ align: 'right' as const, sortKey: k, sortV
 const margin = { key: 'margin', header: 'Margin', align: 'right' as const, hideBelow: 'lg' as const, render: (r: Profit) => (r.revenue ? `${((r.profit / r.revenue) * 100).toFixed(1)}%` : '') }
 
 export default function Reports() {
+  // tab and date range live in the URL, so reload, Back and a shared link all keep them
   const [params, setParams] = useSearchParams()
-  const [from, setFrom] = useState(params.get('from') ?? todayLK().slice(0, 8) + '01')
-  const [to, setTo] = useState(params.get('to') ?? todayLK())
   const tab = (params.get('tab') as Tab) || 'product'
+  const from = params.get('from') ?? todayLK().slice(0, 8) + '01'
+  const to = params.get('to') ?? todayLK()
+  const setRange = (a: string, b: string) => setParams({ tab, from: a, to: b }, { replace: true })
   const setTab = (t: Tab) => setParams({ tab: t, from, to }, { replace: true })
+  const badRange = !from || !to || from > to
 
-  const summary = useQuery({ queryKey: ['reports', 'summary', from, to], queryFn: () => api.get<Record<string, number>>('/reports/summary', { from, to }) })
+  const summary = useQuery({ queryKey: ['reports', 'summary', from, to], queryFn: () => api.get<Record<string, number>>('/reports/summary', { from, to }), enabled: !badRange })
   const path = { product: '/reports/by-product', customer: '/reports/by-customer', type: '/reports/by-type', daily: '/reports/daily', aging: '/reports/aging' }[tab]
-  const data = useQuery({ queryKey: ['reports', tab, from, to], queryFn: () => api.get<unknown[]>(path, tab === 'aging' ? undefined : { from, to }) })
+  const data = useQuery({ queryKey: ['reports', tab, from, to], queryFn: () => api.get<unknown[]>(path, tab === 'aging' ? undefined : { from, to }), enabled: !badRange })
   const s = summary.data
+  const failed = data.error ?? summary.error
+  // totals for the table footer (the same sums the Excel sheet gets)
+  const sum = <T,>(list: T[], f: (r: T) => number) => list.reduce((acc, r) => acc + f(r), 0)
+  const td = (v: ReactNode, cls = '') => <td className={`text-right tabular-nums ${cls}`}>{v}</td>
+  const marginOf = (rev: number, profit: number) => (rev ? `${((profit / rev) * 100).toFixed(1)}%` : '')
 
   const exportExcel = () => {
     const pct = (p: Profit) => (p.revenue ? (p.profit / p.revenue) * 100 : null)
@@ -94,19 +102,22 @@ export default function Reports() {
 
   return (
     <div>
-      <PageHeader title="Reports" subtitle={`${from} to ${to}`} />
-      <Filters>
-        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:w-auto">
-          <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
-          <span className="text-stone-400">to</span>
-          <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" />
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PRESETS.map(([label, fn]) => (
-            <button key={label} className="rounded-full border border-stone-300 bg-white px-3 py-1 text-xs hover:bg-stone-50" onClick={() => { const [a, b] = fn(); setFrom(a); setTo(b) }}>{label}</button>
-          ))}
-        </div>
-      </Filters>
+      <PageHeader title="Reports" subtitle={tab === 'aging' ? 'Unpaid balances as of today' : `${from} to ${to}`} />
+      {tab !== 'aging' && (
+        <Filters>
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:w-auto">
+            <input type="date" className={`input ${badRange ? 'border-red-400' : ''}`} value={from} onChange={(e) => setRange(e.target.value, to)} aria-label="From" />
+            <span className="text-stone-400">to</span>
+            <input type="date" className={`input ${badRange ? 'border-red-400' : ''}`} value={to} onChange={(e) => setRange(from, e.target.value)} aria-label="To" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESETS.map(([label, fn]) => (
+              <button key={label} className="rounded-full border border-stone-300 bg-white px-3 py-1.5 text-xs hover:bg-stone-50" onClick={() => { const [a, b] = fn(); setRange(a, b) }}>{label}</button>
+            ))}
+          </div>
+          {badRange && <p className="w-full text-sm font-medium text-red-600">{!from || !to ? 'Choose both dates.' : 'The From date is after the To date.'}</p>}
+        </Filters>
+      )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Sales" value={`Rs ${rs(s?.revenue)}`} hint={`${s?.invoices ?? 0} invoices · ${s?.unitsSold ?? 0} units + ${s?.freeUnits ?? 0} free`} />
@@ -123,13 +134,13 @@ export default function Reports() {
           { key: 'daily', label: 'Daily' },
           { key: 'aging', label: 'Unpaid (aging)' },
         ]} />
-        <button className="btn-secondary mb-4" onClick={exportExcel}><FileSpreadsheet size={16} /> Excel</button>
+        <button className="btn-secondary mb-4" onClick={exportExcel} disabled={badRange || !!failed || data.isLoading}><FileSpreadsheet size={16} /> Excel</button>
       </div>
 
-      {data.isLoading ? <Spinner /> : (
+      {failed ? <ErrorBox error={failed} onRetry={() => { void data.refetch(); void summary.refetch() }} /> : badRange ? null : data.isLoading ? <Spinner /> : (
         <>
           {tab === 'product' && (
-            <ClientTable<ByProduct> rows={(data.data ?? []) as ByProduct[]} rowKey={(r) => r.productId} initialSort={{ key: 'revenue', dir: 'desc' }} empty="No sales in this period." columns={[
+            <ClientTable<ByProduct> rows={(data.data ?? []) as ByProduct[]} rowKey={(r) => r.productId} initialSort={{ key: 'revenue', dir: 'desc' }} empty="No sales in this period." footer={(() => { const l = (data.data ?? []) as ByProduct[]; const rev = sum(l, (r) => r.revenue); const profit = sum(l, (r) => r.profit); const free = sum(l, (r) => r.free); return l.length ? <tr><td>Total</td>{td(<>{sum(l, (r) => r.qty)}{free ? <span className="text-brand-700"> +{free}</span> : ''}</>)}{td(rs(rev))}{td(rs(sum(l, (r) => r.cost)), 'hidden lg:table-cell')}{td(rs(profit))}{td(marginOf(rev, profit), 'hidden lg:table-cell')}</tr> : null })()} columns={[
               { key: 'item', header: 'Item', sortKey: 'item', sortValue: (r) => r.label, render: (r) => <Link className="hover:underline" to={`/products/${r.productId}`}>{r.label}</Link> },
               { key: 'qty', header: 'Qty', align: 'right', sortKey: 'qty', sortValue: (r) => r.qty, render: (r) => <>{r.qty}{r.free ? <span className="text-brand-700"> +{r.free}</span> : ''}</> },
               { key: 'revenue', header: 'Sales', ...money('revenue') },
@@ -139,7 +150,7 @@ export default function Reports() {
             ]} />
           )}
           {tab === 'customer' && (
-            <ClientTable<ByCustomer> rows={(data.data ?? []) as ByCustomer[]} rowKey={(r) => r.customerId} initialSort={{ key: 'revenue', dir: 'desc' }} empty="No sales in this period." columns={[
+            <ClientTable<ByCustomer> rows={(data.data ?? []) as ByCustomer[]} rowKey={(r) => r.customerId} initialSort={{ key: 'revenue', dir: 'desc' }} empty="No sales in this period." footer={(() => { const l = (data.data ?? []) as ByCustomer[]; const rev = sum(l, (r) => r.revenue); const profit = sum(l, (r) => r.profit); return l.length ? <tr><td>Total</td><td className="hidden lg:table-cell" /><td className="hidden xl:table-cell" />{td(sum(l, (r) => r.invoices))}{td(rs(rev))}{td(rs(profit))}{td(marginOf(rev, profit), 'hidden lg:table-cell')}</tr> : null })()} columns={[
               { key: 'name', header: 'Customer', sortKey: 'name', sortValue: (r) => r.name, render: (r) => <Link className="hover:underline" to={`/customers/${r.customerId}`}>{r.name}</Link> },
               { key: 'type', header: 'Type', hideBelow: 'lg', render: (r) => <Badge tone="blue">{r.typeName}</Badge> },
               { key: 'area', header: 'Area', hideBelow: 'xl', render: (r) => r.area },
@@ -150,7 +161,7 @@ export default function Reports() {
             ]} />
           )}
           {tab === 'type' && (
-            <ClientTable<ByType> rows={(data.data ?? []) as ByType[]} rowKey={(r) => r.typeId} columns={[
+            <ClientTable<ByType> rows={(data.data ?? []) as ByType[]} rowKey={(r) => r.typeId} footer={(() => { const l = (data.data ?? []) as ByType[]; const rev = sum(l, (r) => r.revenue); const profit = sum(l, (r) => r.profit); return l.length ? <tr><td>Total</td>{td(sum(l, (r) => r.customers))}{td(sum(l, (r) => r.invoices))}{td(rs(rev))}{td(rs(profit))}{td(marginOf(rev, profit), 'hidden lg:table-cell')}</tr> : null })()} columns={[
               { key: 'name', header: 'Customer type', render: (r) => <span className="font-medium">{r.name}</span> },
               { key: 'cust', header: 'Customers', align: 'right', render: (r) => r.customers },
               { key: 'inv', header: 'Invoices', align: 'right', render: (r) => r.invoices },
@@ -160,7 +171,7 @@ export default function Reports() {
             ]} />
           )}
           {tab === 'daily' && (
-            <ClientTable<Daily> rows={(data.data ?? []) as Daily[]} rowKey={(r) => r.date} initialSort={{ key: 'date', dir: 'desc' }} empty="No sales in this period." columns={[
+            <ClientTable<Daily> rows={(data.data ?? []) as Daily[]} rowKey={(r) => r.date} initialSort={{ key: 'date', dir: 'desc' }} empty="No sales in this period." footer={(() => { const l = (data.data ?? []) as Daily[]; return l.length ? <tr><td>Total</td>{td(sum(l, (r) => r.invoices))}{td(rs(sum(l, (r) => r.revenue)))}{td(rs(sum(l, (r) => r.collected)), 'hidden lg:table-cell')}{td(rs(sum(l, (r) => r.profit)))}</tr> : null })()} columns={[
               { key: 'date', header: 'Date', sortKey: 'date', sortValue: (r) => r.date, render: (r) => <Link className="hover:underline" to={`/sales?from=${r.date}&to=${r.date}`}>{r.date}</Link> },
               { key: 'inv', header: 'Invoices', align: 'right', render: (r) => r.invoices },
               { key: 'revenue', header: 'Sales', ...money('revenue') },
@@ -169,7 +180,7 @@ export default function Reports() {
             ]} />
           )}
           {tab === 'aging' && (
-            <ClientTable<Aging> rows={(data.data ?? []) as Aging[]} rowKey={(r) => r.customerId} initialSort={{ key: 'total', dir: 'desc' }} empty="Nobody owes you money. 🎉" columns={[
+            <ClientTable<Aging> rows={(data.data ?? []) as Aging[]} rowKey={(r) => r.customerId} initialSort={{ key: 'total', dir: 'desc' }} empty="Nobody owes you money. 🎉" footer={(() => { const l = (data.data ?? []) as Aging[]; return l.length ? <tr><td>Total</td><td className="hidden lg:table-cell" />{td(rs(sum(l, (r) => r.current)))}{td(rs(sum(l, (r) => r.d30)))}{td(rs(sum(l, (r) => r.d60)))}{td(rs(sum(l, (r) => r.d90)), 'hidden lg:table-cell')}{td(rs(sum(l, (r) => r.d90plus)), 'hidden lg:table-cell')}{td(rs(sum(l, (r) => r.total)))}</tr> : null })()} columns={[
               { key: 'name', header: 'Customer', sortKey: 'name', sortValue: (r) => r.name, render: (r) => <Link className="hover:underline" to={`/customers/${r.customerId}`}>{r.name}<span className="ml-1.5 text-xs text-stone-400">{r.typeName}</span></Link> },
               { key: 'phone', header: 'Phone', hideBelow: 'lg', render: (r) => r.phone },
               { key: 'current', header: 'Not due', align: 'right', render: (r) => (r.current ? rs(r.current) : '') },

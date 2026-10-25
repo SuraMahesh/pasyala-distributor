@@ -72,7 +72,7 @@ export function PurchaseList() {
           </>
         }
       />
-      <div className="mb-4 grid grid-cols-3 gap-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         <Stat label="Invoices" value={q.data?.summary.count ?? 0} />
         <Stat label="Total" value={`Rs ${rs(q.data?.summary.netTotal)}`} />
         <Stat label="To pay" value={`Rs ${rs(q.data?.summary.due)}`} tone={q.data?.summary.due ? 'warn' : 'default'} />
@@ -129,7 +129,7 @@ function toDraft(inv: PurchaseInvoice): Draft {
     payMethod: inv.payMethod,
     billDiscPct: inv.billDiscPct,
     paidOnInvoice: inv.paidOnInvoice,
-    paidTouched: true,
+    paidTouched: Math.abs(inv.paidOnInvoice - inv.netTotal) > 0.004,
     notes: inv.notes,
     invoiceNo: inv.invoiceNo,
     orderNo: inv.orderNo,
@@ -181,7 +181,7 @@ export function PurchaseEdit() {
     },
   )
   if (id && existing.isLoading) return <Spinner />
-  if (id && existing.error) return <ErrorBox error={existing.error} />
+  if (id && existing.error) return <div><PageHeader title="Edit purchase invoice" back={{ to: '/purchases', label: 'Purchases' }} /><ErrorBox error={existing.error} /></div>
   const inv = existing.data
   const base = inv ? toDraft(inv) : { ...emptyDraft('purchase'), partyId: suppliers.length === 1 ? suppliers[0].id : null }
   const initial = scan && !inv ? scanToDraft(scan.result, base) : base
@@ -193,7 +193,7 @@ export function PurchaseEdit() {
         <div className="mb-4 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <Lock size={18} className="mt-0.5 shrink-0" />
           <div className="min-w-0">
-            <p className="font-medium">Some items are already sold — their qty (incl. free) cannot go below what was sold:</p>
+            <p className="font-medium">Some items are already used (sold or adjusted) — their qty (incl. free) cannot go below what was used:</p>
             <UsageList usage={usage.data} />
           </div>
         </div>
@@ -242,7 +242,7 @@ export function PurchaseView() {
         tone: 'warning',
         alertOnly: true,
         confirmText: 'OK',
-        message: 'Items from this invoice are already on sales invoices. Delete or edit those sales first — then this invoice can be deleted.',
+        message: 'Items from this invoice are already used on sales invoices or stock adjustments. Delete or edit those first — then this invoice can be deleted.',
         details: <UsageList usage={u} />,
       })
       return
@@ -252,7 +252,7 @@ export function PurchaseView() {
   const inv = q.data
   const doc = useMemo(() => inv && <PurchaseDoc inv={inv} paid={inv.paid} />, [inv])
   if (q.isLoading) return <Spinner />
-  if (q.error || !inv) return <ErrorBox error={q.error ?? 'Not found'} />
+  if (q.error || !inv) return <div><PageHeader title="Purchase invoice" back={{ to: '/purchases', label: 'Purchases' }} /><ErrorBox error={q.error ?? 'Not found'} /></div>
   return (
     <div>
       <PageHeader
@@ -264,7 +264,7 @@ export function PurchaseView() {
             <button
               className="btn-danger"
               onClick={askDelete}
-              title={usage.data?.used ? 'Items from this invoice were already sold' : undefined}
+              title={usage.data?.used ? 'Items from this invoice were already used' : undefined}
             >
               <Trash2 size={15} /> Delete
             </button>
@@ -279,12 +279,12 @@ export function PurchaseView() {
         <div className="no-print mb-4 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <Lock size={18} className="mt-0.5 shrink-0" />
           <div className="min-w-0">
-            <p className="font-medium">Items from this invoice are already sold — it cannot be deleted, and these items cannot be reduced below what was sold.</p>
+            <p className="font-medium">Items from this invoice are already used (sold or adjusted) — it cannot be deleted, and these items cannot be reduced below what was used.</p>
             <UsageList usage={usage.data} />
           </div>
         </div>
       )}
-      <div className="no-print mb-4 grid grid-cols-3 gap-3">
+      <div className="no-print mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         <Stat label="Net total" value={`Rs ${rs(inv.netTotal)}`} />
         <Stat label="Paid" value={`Rs ${rs(inv.paid)}`} tone="good" />
         <Stat label="Due" value={`Rs ${rs(inv.due)}`} tone={inv.due > 0 ? 'warn' : 'default'} />
@@ -308,7 +308,7 @@ function UsageList({ usage }: { usage: PurchaseUsage }) {
     <ul className="mt-1.5 space-y-1">
       {usage.items.filter((i) => i.used > 0).map((i) => (
         <li key={i.productId}>
-          <span className="font-medium">{i.label}</span> — {i.used} of {i.received} sold:{' '}
+          <span className="font-medium">{i.label}</span> — {i.used} of {i.received} used:{' '}
           {i.usedBy.map((s, k) => (
             <span key={`${s.kind}-${s.id}`}>
               {k > 0 && ', '}

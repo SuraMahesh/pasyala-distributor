@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Leaf, Loader2, LogIn } from 'lucide-react'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { api, ApiError, setToken } from '../lib/api'
+import { api, ApiError, setImageToken, setToken } from '../lib/api'
 
 interface Me {
   required: boolean
   loggedIn: boolean
+  imageToken?: string
 }
 
 const LogoutCtx = createContext<{ required: boolean; logout: () => void }>({ required: false, logout: () => {} })
@@ -16,6 +17,9 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   const qc = useQueryClient()
   const me = useQuery({ queryKey: ['auth', 'me'], queryFn: () => api.get<Me>('/auth/me'), staleTime: Infinity, retry: 1 })
 
+  useEffect(() => {
+    if (me.data?.imageToken) setImageToken(me.data.imageToken)
+  }, [me.data?.imageToken])
   useEffect(() => {
     const h = () => {
       setToken('')
@@ -78,8 +82,9 @@ function Login({ onDone }: { onDone: () => void }) {
     setBusy(true)
     setErr('')
     try {
-      const { token } = await api.post<{ token: string }>('/auth/login', { password: pw })
+      const { token, imageToken } = await api.post<{ token: string; imageToken?: string }>('/auth/login', { password: pw })
       setToken(token)
+      setImageToken(imageToken ?? '')
       onDone()
     } catch (e2) {
       setErr(e2 instanceof ApiError && e2.status === 401 ? 'Wrong password' : (e2 as Error).message)

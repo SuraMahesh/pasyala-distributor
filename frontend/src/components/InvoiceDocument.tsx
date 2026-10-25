@@ -71,15 +71,15 @@ export default function InvoiceDocument({
         </dl>
       </div>
 
-      <div className="-mx-1 mt-4 overflow-x-auto sm:mx-0 sm:mt-5">
-        <table className="w-full min-w-[520px] border-collapse">
+      <div className="@container -mx-1 mt-4 overflow-x-auto sm:mx-0 sm:mt-5">
+        <table className="w-full border-collapse">
           <thead>
             <tr className="border-y-2 border-stone-800 text-left text-[11px] uppercase">
-              <th className="py-1.5 pr-2">Item code</th>
+              <th className="hidden py-1.5 pr-2 @min-[520px]:table-cell">Item code</th>
               <th className="py-1.5 pr-2">Item description</th>
               <th className="py-1.5 pr-2 text-right">Qty</th>
               <th className="py-1.5 pr-2 text-right">Unit price</th>
-              <th className="py-1.5 pr-2 text-right">Disc%</th>
+              <th className="hidden py-1.5 pr-2 text-right @min-[520px]:table-cell">Disc%</th>
               <th className="py-1.5 text-right">Amount (Rs)</th>
             </tr>
           </thead>
@@ -88,22 +88,28 @@ export default function InvoiceDocument({
               const label = l.name ? `${l.size} ${l.name}` : 'Item'
               const rows = [
                 <tr key={i} className="border-b border-stone-100">
-                  <td className="py-1 pr-2 font-mono text-[11px]">{l.code}</td>
-                  <td className="py-1 pr-2 uppercase">{label}</td>
+                  <td className="hidden py-1 pr-2 font-mono text-[11px] @min-[520px]:table-cell">{l.code}</td>
+                  <td className="py-1 pr-2 uppercase">
+                    {label}
+                    <span className="block font-mono text-[10px] normal-case text-stone-500 @min-[520px]:hidden">{l.code}{l.discPct ? ` · disc ${l.discPct.toFixed(2)}%` : ''}</span>
+                  </td>
                   <td className="py-1 pr-2 text-right tabular-nums">{l.qty}</td>
                   <td className="py-1 pr-2 text-right tabular-nums">{rs(l.unitPrice)}</td>
-                  <td className="py-1 pr-2 text-right tabular-nums">{l.discPct.toFixed(2)}</td>
+                  <td className="hidden py-1 pr-2 text-right tabular-nums @min-[520px]:table-cell">{l.discPct.toFixed(2)}</td>
                   <td className="py-1 text-right tabular-nums">{rs(lineNet(l))}</td>
                 </tr>,
               ]
               if (l.freeQty) {
                 rows.push(
                   <tr key={`${i}f`} className="border-b border-stone-100 text-stone-600">
-                    <td className="py-1 pr-2 font-mono text-[11px]">{l.code}</td>
-                    <td className="py-1 pr-2 uppercase">{label} <span className="text-[11px] normal-case">(free)</span></td>
+                    <td className="hidden py-1 pr-2 font-mono text-[11px] @min-[520px]:table-cell">{l.code}</td>
+                    <td className="py-1 pr-2 uppercase">
+                      {label} <span className="text-[11px] normal-case">(free)</span>
+                      <span className="block font-mono text-[10px] normal-case text-stone-500 @min-[520px]:hidden">{l.code}</span>
+                    </td>
                     <td className="py-1 pr-2 text-right tabular-nums">{l.freeQty}</td>
                     <td className="py-1 pr-2 text-right tabular-nums">0.00</td>
-                    <td className="py-1 pr-2 text-right tabular-nums">{l.discPct.toFixed(2)}</td>
+                    <td className="hidden py-1 pr-2 text-right tabular-nums @min-[520px]:table-cell">{l.discPct.toFixed(2)}</td>
                     <td className="py-1 text-right tabular-nums">0.00</td>
                   </tr>,
                 )

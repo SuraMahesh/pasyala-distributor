@@ -3,6 +3,7 @@ import { codeShape, invoiceTotals, levenshtein, PAY_METHODS, round2, type PayMet
 
 export type { RawScan }
 import { AppError } from '../errors'
+import { defaultScanModel } from './llm'
 
 export interface CatalogItem {
   id: number
@@ -59,8 +60,8 @@ const TOOL: Anthropic.Tool = {
   },
 }
 
-export function claudeScanner(apiKey: string, model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5'): InvoiceScanner {
-  const client = new Anthropic({ apiKey })
+function claudeScanner(apiKey: string, model = process.env.ANTHROPIC_MODEL || defaultScanModel()): InvoiceScanner {
+  const client = new Anthropic({ apiKey }) // base URL: ANTHROPIC_BASE_URL (read by the SDK), default api.anthropic.com
   return async ({ file, catalog, parties }) => {
     const media: Anthropic.ContentBlockParam =
       file.mimeType === 'application/pdf'
@@ -115,7 +116,7 @@ function bigrams(s: string) {
   return out
 }
 /** Dice similarity 0…1 on letter pairs */
-export function similarity(a: string, b: string) {
+function similarity(a: string, b: string) {
   const x = bigrams(norm(a).replace(/[0-9.]/g, ''))
   const y = bigrams(norm(b).replace(/[0-9.]/g, ''))
   if (!x.length || !y.length) return 0
@@ -226,7 +227,9 @@ export function buildScanResult(
       warnings.push(`Total from the lines is Rs ${t.netTotal.toFixed(2)} but the invoice shows Rs ${printedNetTotal.toFixed(2)} — a line or discount may be read wrong`)
     }
   }
-  for (const n of raw.notes ?? []) if (n?.trim()) warnings.push(n.trim())
+  // Some models return `notes` as one string instead of an array; iterating a string would give one warning per letter.
+  const notes: unknown[] = Array.isArray(raw.notes) ? raw.notes : raw.notes ? [raw.notes] : []
+  for (const n of notes) if (typeof n === 'string' && n.trim()) warnings.push(n.trim())
 
   return {
     kind,

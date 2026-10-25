@@ -124,13 +124,13 @@ export default function Dashboard() {
 
       {/* sales trend + who owes */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] [&>*]:min-w-0">
-        <Card title="Sales — last 30 days" action={<Link to="/reports?tab=daily" className="text-sm text-brand-700 hover:underline">Daily report</Link>}>
+        <Card title="Sales — last 30 days" action={<Link to="/reports?tab=daily" className="-my-1 inline-flex min-h-8 items-center text-sm text-brand-700 hover:underline">Daily report</Link>}>
           <SalesChart data={d.last30} />
         </Card>
 
         <Card
           title={<span className="flex items-center gap-2">Collect money {d.toCollect.length > 0 && <Badge tone={d.overdue > 0 ? 'red' : 'amber'}>{d.toCollect.length}</Badge>}</span>}
-          action={<Link to="/reports?tab=aging" className="text-sm text-brand-700 hover:underline">Aging</Link>}
+          action={<Link to="/reports?tab=aging" className="-my-1 inline-flex min-h-8 items-center text-sm text-brand-700 hover:underline">Aging</Link>}
         >
           {d.toCollect.length === 0 ? (
             <EmptyNote>No customer owes you money. 🎉</EmptyNote>
@@ -140,8 +140,8 @@ export default function Dashboard() {
                 <li key={c.id} className="flex items-center gap-3 px-4 py-2.5">
                   <Link to={`/customers/${c.id}`} className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5 truncate text-sm font-medium hover:underline">{c.name}{c.overLimit && <Badge tone="red">over limit</Badge>}</span>
-                    <span className="block truncate text-xs text-stone-500">
-                      {c.overdue > 0 ? <span className="text-red-600">Rs {rs(c.overdue)} overdue since {c.oldestDueDate}</span> : c.typeName}
+                    <span className="block text-xs text-stone-500">
+                      {c.overdue > 0 ? <span className="text-red-600">Rs {rs(c.overdue)} overdue · due {c.oldestDueDate}</span> : c.typeName}
                     </span>
                   </Link>
                   <span className="shrink-0 text-right text-sm font-semibold tabular-nums">{rs(c.balance)}</span>
@@ -161,7 +161,7 @@ export default function Dashboard() {
       <div className="grid gap-5 lg:grid-cols-3 [&>*]:min-w-0">
         <Card
           title={<span className="flex items-center gap-2"><AlertTriangle size={16} className="text-amber-500" /> Reorder soon {d.stock.low + d.stock.out > 0 && <Badge tone={d.stock.out ? 'red' : 'amber'}>{d.stock.low + d.stock.out}</Badge>}</span>}
-          action={<Link to="/purchases/new" className="text-sm text-brand-700 hover:underline">Enter purchase</Link>}
+          action={<Link to="/purchases/new" className="-my-1 inline-flex min-h-8 items-center text-sm text-brand-700 hover:underline">Enter purchase</Link>}
         >
           {d.lowStock.length === 0 ? (
             <EmptyNote>All items are above their reorder level.</EmptyNote>
@@ -182,7 +182,7 @@ export default function Dashboard() {
           )}
         </Card>
 
-        <Card title="Recent sales" action={<Link to="/sales" className="text-sm text-brand-700 hover:underline">All sales</Link>}>
+        <Card title="Recent sales" action={<Link to="/sales" className="-my-1 inline-flex min-h-8 items-center text-sm text-brand-700 hover:underline">All sales</Link>}>
           {d.recent.length === 0 ? (
             <EmptyNote>No sales yet. <Link to="/sales/new" className="font-medium text-brand-700 hover:underline">Create the first invoice</Link></EmptyNote>
           ) : (
@@ -236,7 +236,7 @@ function change(now: number, before: number) {
 
 function Chip({ to, tone, children }: { to: string; tone: 'red' | 'amber'; children: ReactNode }) {
   return (
-    <Link to={to} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium transition ${tone === 'red' ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>
+    <Link to={to} className={`inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 font-medium transition ${tone === 'red' ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>
       {children} <ChevronRight size={12} />
     </Link>
   )

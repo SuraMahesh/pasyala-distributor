@@ -29,6 +29,8 @@ export const settings = pgTable('settings', {
   footerNote: text('footer_note').notNull().default(''),
   supplierCustomerCode: text('supplier_customer_code').notNull().default(''),
   allowNegativeStock: boolean('allow_negative_stock').notNull().default(false),
+  /** random secret that signs login tokens — created on first start, see auth.ts */
+  authSecret: text('auth_secret'),
 })
 
 export const customerTypes = pgTable('customer_types', {
@@ -226,6 +228,28 @@ export const stockAdjustments = pgTable(
     createdAt: created(),
   },
   (t) => [index('adj_product_idx').on(t.productId)],
+)
+
+/** Stock-count corrections asked for through the assistant; the owner approves before anything is posted. */
+export const assistantRequests = pgTable(
+  'assistant_requests',
+  {
+    id: serial('id').primaryKey(),
+    productId: integer('product_id').notNull().references(() => products.id, { onDelete: 'restrict' }),
+    label: text('label').notNull(),
+    onHand: integer('on_hand').notNull(), // ERP on hand when the request was made
+    countedQty: integer('counted_qty').notNull(), // what was physically counted
+    delta: integer('delta').notNull(), // countedQty − onHand: the adjustment to post
+    reason: text('reason').notNull(), // one of ADJ_REASONS
+    notes: text('notes').notNull().default(''),
+    requestedBy: text('requested_by').notNull(),
+    status: text('status').notNull().default('pending'), // pending | applied | rejected
+    approver: text('approver').notNull().default(''),
+    adjustmentId: integer('adjustment_id').references(() => stockAdjustments.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+  },
+  (t) => [index('assistant_requests_status_idx').on(t.status)],
 )
 
 /** Photos / scans of the paper invoices. Each belongs to exactly one sales or purchase invoice. */

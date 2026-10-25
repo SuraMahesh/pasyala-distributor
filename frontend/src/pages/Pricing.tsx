@@ -11,6 +11,7 @@ import { Badge, Field, Filters, Modal, NumberInput, PageHeader, SearchBox, Spinn
 import { api } from '../lib/api'
 import { downloadExcel } from '../lib/excel'
 import { useApiMutation, useCustomerTypes, useProductOptions, useSettings } from '../lib/hooks'
+import { toast } from 'sonner'
 
 type Tab = 'types' | 'grid' | 'promotions'
 
@@ -91,7 +92,7 @@ function TypeForm({ type, onClose }: { type: CustomerType; onClose: () => void }
   const save = useApiMutation((body: CustomerType) => (isNew ? api.post('/customer-types', body) : api.put(`/customer-types/${type.id}`, body)), { success: 'Customer type saved', onSuccess: onClose })
   const del = useApiMutation(() => api.del(`/customer-types/${type.id}`), { success: 'Customer type deleted', onSuccess: onClose })
   const submit = async () => {
-    if (!t.name.trim()) return
+    if (!t.name.trim()) return toast.error('Name is required')
     if (!isNew && t.defaultDiscPct !== type.defaultDiscPct && (type.customerCount ?? 0) > 0) {
       const ok = await confirm({ title: 'Change discount for all these customers?', message: `${type.customerCount} customer(s) of type "${type.name}" will get ${t.defaultDiscPct}% on new invoices (unless they have their own discount or a product price). Existing invoices do not change.`, tone: 'warning', confirmText: 'Save' })
       if (!ok) return
@@ -365,7 +366,7 @@ function PromoForm({ promo, onClose }: { promo: Promotion; onClose: () => void }
         <Field label="From (optional)"><input type="date" className="input" value={p.startDate ?? ''} onChange={(e) => setP({ ...p, startDate: e.target.value || null })} /></Field>
         <Field label="To (optional)"><input type="date" className="input" value={p.endDate ?? ''} onChange={(e) => setP({ ...p, endDate: e.target.value || null })} /></Field>
         <Field label="Name / note" className="sm:col-span-2"><input className="input" value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} placeholder="e.g. Avurudu offer" /></Field>
-        <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="h-4 w-4" checked={p.active} onChange={(e) => setP({ ...p, active: e.target.checked })} /> Active</label>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="h-5 w-5 accent-brand-700" checked={p.active} onChange={(e) => setP({ ...p, active: e.target.checked })} /> Active</label>
       </div>
       <p className="mt-3 rounded-lg bg-stone-50 p-3 text-sm text-stone-600">Example: selling 36 → {Math.floor(36 / (p.buyQty || 1)) * p.freeQty} free.</p>
       {err && <p className="mt-3 text-sm font-medium text-red-600">{err}</p>}

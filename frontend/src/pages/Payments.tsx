@@ -40,7 +40,7 @@ export default function Payments() {
       key: 'del', header: '', align: 'right', mobile: false,
       render: (r) => (
         <button
-          className="btn-ghost hover:text-red-600"
+          className="btn-ghost hover:text-red-600 max-md:min-h-10 max-md:min-w-10"
           aria-label="Delete payment"
           onClick={async () => (await confirm({ title: 'Delete this payment?', message: `Rs ${rs(r.amount)} ${r.partyType === 'customer' ? 'from' : 'to'} ${r.partyName} on ${r.date}. Their balance goes back up.`, confirmText: 'Delete', tone: 'danger' })) && del.mutate(r.id)}
         >
@@ -149,6 +149,9 @@ export function PaymentModal({ partyType, partyId, defaultAmount, reference: ref
   const [err, setErr] = useState('')
   const confirm = useConfirm()
   const amt = amount ?? (party ? Math.max(party.balance, 0) : 0)
+  const owed = party ? Math.max(party.balance, 0) : 0
+  // payments are applied to the oldest unpaid invoice first (README), so paying "this" invoice may leave it unpaid
+  const olderDue = party && defaultAmount != null ? owed - amt : 0
   const save = useApiMutation((body: unknown) => api.post('/payments', body), { success: partyType === 'customer' ? 'Payment received' : 'Supplier payment saved', onSuccess: onClose })
 
   const submit = async () => {
@@ -181,6 +184,13 @@ export function PaymentModal({ partyType, partyId, defaultAmount, reference: ref
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">
+        {olderDue > 0.004 && party && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 sm:col-span-2">
+            Payments settle the <b>oldest</b> unpaid invoices first. {party.name} {partyType === 'customer' ? 'owes' : 'is owed'} Rs {rs(owed)} in total, so Rs {rs(amt)} goes to the older
+            invoices and {ref0 ? <b>{ref0}</b> : 'this invoice'} may stay unpaid.{' '}
+            <button type="button" className="font-medium underline" onClick={() => setAmount(Math.round(owed * 100) / 100)}>Pay the full Rs {rs(owed)}</button>
+          </div>
+        )}
         <Field label={partyType === 'customer' ? 'Customer' : 'Supplier'} className="sm:col-span-2">
           <Combobox
             items={list}

@@ -8,6 +8,7 @@ import {
   Leaf,
   LogOut,
   Menu,
+  MessageSquare,
   Package,
   Plus,
   Settings,
@@ -37,6 +38,7 @@ const NAV = [
   { to: '/payments', label: 'Payments', icon: Wallet },
   { to: '/photos', label: 'Invoice photos', icon: Images },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
+  { to: '/assistant', label: 'Assistant', icon: MessageSquare },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -60,8 +62,9 @@ export default function Layout() {
   }
   useEffect(() => setOpen(false), [loc.pathname])
   useEffect(() => {
-    if (settings?.name) document.title = settings.name
-  }, [settings?.name])
+    const current = NAV.find((n) => (n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to)))?.label
+    document.title = [current, settings?.name].filter(Boolean).join(' · ') || 'ERP'
+  }, [settings?.name, loc.pathname])
 
   const nav = (
     <nav className="flex flex-col gap-0.5 p-3">
@@ -128,7 +131,7 @@ export default function Layout() {
           <button className="rounded-lg p-2 text-stone-600 hover:bg-stone-100" onClick={() => setOpen(true)} aria-label="Menu">
             <Menu size={22} />
           </button>
-          <Link to="/" className="min-w-0 flex-1 truncate font-semibold text-brand-800">{company}</Link>
+          <Link to="/" className="min-w-0 flex-1 truncate py-1 font-semibold text-brand-800">{company}</Link>
           <NotificationBell />
         </header>
         <main className="mx-auto w-full max-w-7xl min-w-0 flex-1 overflow-x-clip px-4 pt-4 pb-24 md:px-6 md:pt-6 lg:pb-8">

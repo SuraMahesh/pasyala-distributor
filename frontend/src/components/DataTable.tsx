@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Inbox } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { type ReactNode, useId, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Empty, ErrorBox } from './ui'
 
@@ -48,6 +48,7 @@ const hideCls = (h?: string) => (h === 'lg' ? 'hidden lg:table-cell' : h === 'xl
 
 export function DataTable<T>(p: DataTableProps<T>) {
   const nav = useNavigate()
+  const sortId = useId()
   const {
     rows, columns, rowKey, loading, error, onRetry, empty, page, pageSize, total, onPage, onPageSize,
     sort, dir = 'asc', onSort, rowLink, rowClassName, mobileCard, footer, pageSizes = [10, 25, 50, 100],
@@ -61,7 +62,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
     const Icon = active ? (dir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
     return (
       <button
-        className={`inline-flex items-center gap-1 uppercase hover:text-stone-800 ${active ? 'text-stone-800' : ''}`}
+        className={`-my-1.5 inline-flex items-center gap-1 py-1.5 uppercase hover:text-stone-800 ${active ? 'text-stone-800' : ''}`}
         onClick={() => onSort(c.sortKey!, active && dir === 'asc' ? 'desc' : 'asc')}
       >
         {c.header}
@@ -75,6 +76,19 @@ export function DataTable<T>(p: DataTableProps<T>) {
   return (
     <div className="card overflow-hidden">
       <div className={`relative ${loading ? 'opacity-60 transition-opacity' : ''}`}>
+        {/* phones: a sort control (the sortable table header is hidden here) */}
+        {onSort && columns.some((c) => c.sortKey) && (
+          <div className="flex items-center justify-end gap-1 border-b border-stone-100 px-3 py-1.5 text-xs text-stone-500 md:hidden">
+            <label htmlFor={sortId}>Sort</label>
+            <select id={sortId} className="min-h-9 rounded-md border border-stone-200 bg-white px-2 py-1.5 text-xs" value={sort ?? ''} onChange={(e) => e.target.value && onSort(e.target.value, dir)}>
+              {!sort && <option value="">Default</option>}
+              {columns.filter((c) => c.sortKey).map((c) => <option key={c.sortKey} value={c.sortKey}>{typeof c.header === 'string' ? c.header : c.sortKey}</option>)}
+            </select>
+            <button className="btn-ghost min-h-9 min-w-9" aria-label={dir === 'asc' ? 'Ascending — switch to descending' : 'Descending — switch to ascending'} disabled={!sort} onClick={() => sort && onSort(sort, dir === 'asc' ? 'desc' : 'asc')}>
+              {dir === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+            </button>
+          </div>
+        )}
         {/* phones: cards */}
         <ul className="divide-y divide-stone-100 md:hidden">
           {rows.map((row) => (
@@ -154,12 +168,12 @@ export function Pagination({ page, pageSize, total, onPage, onPageSize, pageSize
     const set = new Set([1, pages, page - 1, page, page + 1].filter((n) => n >= 1 && n <= pages))
     return [...set].sort((a, b) => a - b)
   }, [page, pages])
-  const btn = 'flex h-8 min-w-8 items-center justify-center rounded-md border border-stone-200 px-2 text-sm disabled:opacity-40 hover:bg-stone-50'
+  const btn = 'flex h-9 min-w-9 items-center justify-center rounded-md border border-stone-200 px-2 text-sm disabled:opacity-40 hover:bg-stone-50'
   return (
     <div className="no-print flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 px-3 py-2.5 text-sm text-stone-600 md:px-4">
       <div className="flex items-center gap-2">
         <span className="tabular-nums">{from}–{to} of {total}</span>
-        <select className="rounded-md border border-stone-200 bg-white px-1.5 py-1 text-sm" value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} aria-label="Rows per page">
+        <select className="min-h-9 rounded-md border border-stone-200 bg-white px-2 py-1.5 text-sm" value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} aria-label="Rows per page">
           {pageSizes.map((s) => <option key={s} value={s}>{s} / page</option>)}
         </select>
       </div>

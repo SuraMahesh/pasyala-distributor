@@ -75,4 +75,12 @@ describe('offline OCR invoice reading (no API key)', () => {
     expect(res.warnings.join(' ')).toMatch(/only supplier/)
     expect(res.warnings.join(' ')).toMatch(/using 8% from this supplier's last invoice/)
   })
+
+  it('a model that returns `notes` as one string gives one warning, not one per letter', () => {
+    const { r } = read('62d4f6cb')
+    const asString = { ...r, notes: 'Bill discount hard to read' as unknown as string[] }
+    const res = buildScanResult('purchase', asString, catalog, [{ id: 7, name: 'Pasyale Ayurveda Osu (PVT) LTD' }], new Set(), { lastBillDisc: new Map() })
+    expect(res.warnings).toContain('Bill discount hard to read')
+    expect(res.warnings).not.toContain('B')
+  })
 })

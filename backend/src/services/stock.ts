@@ -82,7 +82,7 @@ export async function stockMap(ex: Executor, productIds?: number[]) {
   return map
 }
 
-export async function allowNegativeStock(ex: Executor) {
+async function allowNegativeStock(ex: Executor) {
   const [s] = await rows<{ allow_negative_stock: boolean }>(ex, sql`select allow_negative_stock from settings where id = 1`)
   return s?.allow_negative_stock ?? false
 }
@@ -108,7 +108,7 @@ export async function assertStockAvailable(ex: Executor, deltas: Map<number, num
     })
     .filter((x) => x.after < 0)
   if (short.length) {
-    const list = short.map((s) => `${s.label} has ${s.onHand}, needs ${s.onHand - s.after}`).join('; ')
+    const list = short.map((s) => `${s.label} is short by ${-s.after} (${s.onHand} in stock now)`).join('; ')
     throw conflict(
       action
         ? `Cannot ${action} — those goods were already sold or used. Not enough stock: ${list}. Delete or change the sales first, or add the stock back.`

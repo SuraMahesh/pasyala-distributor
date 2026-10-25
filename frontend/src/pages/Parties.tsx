@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { FileSpreadsheet, Pencil, Plus, Trash2, Wallet } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { rs, type Customer, type CustomerWithBalance, type StatementRow, type Supplier, type SupplierWithBalance } from '@pjd/shared'
 import { useConfirm } from '../components/Confirm'
 import { ClientTable, DataTable, type Column } from '../components/DataTable'
@@ -64,7 +64,7 @@ export function CustomerList() {
           </>
         }
       />
-      <div className="mb-4 grid grid-cols-3 gap-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         <Stat label="To collect" value={`Rs ${rs(q.data?.summary.receivable)}`} tone="warn" />
         <Stat label="Overdue" value={`Rs ${rs(q.data?.summary.overdue)}`} tone={q.data?.summary.overdue ? 'bad' : 'default'} to="/customers?status=overdue" />
         <Stat label="Over limit" value={q.data?.summary.overLimit ?? 0} tone={q.data?.summary.overLimit ? 'bad' : 'default'} to="/customers?status=overLimit" />
@@ -129,7 +129,7 @@ export function CustomerList() {
 
 const blankCustomer = (typeId: number): Customer => ({ id: 0, code: '', name: '', typeId, phone: '', address: '', area: '', discPct: null, creditLimit: 0, creditDays: null, notes: '', active: true })
 
-export function CustomerForm({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+export function CustomerForm({ customer, onClose, onDeleted }: { customer: Customer; onClose: () => void; onDeleted?: () => void }) {
   const isNew = !customer.id
   const { data: types = [] } = useCustomerTypes()
   const [c, setC] = useState(customer)
@@ -137,7 +137,7 @@ export function CustomerForm({ customer, onClose }: { customer: Customer; onClos
   const confirm = useConfirm()
   const type = types.find((t) => t.id === c.typeId)
   const save = useApiMutation((body: Customer) => (isNew ? api.post('/customers', body) : api.put(`/customers/${customer.id}`, body)), { success: isNew ? 'Customer added' : 'Customer saved', onSuccess: onClose, silentError: true })
-  const del = useApiMutation(() => api.del(`/customers/${customer.id}`), { success: 'Customer deleted', onSuccess: onClose })
+  const del = useApiMutation(() => api.del(`/customers/${customer.id}`), { success: 'Customer deleted', onSuccess: () => { onClose(); onDeleted?.() } })
   const submit = () => {
     if (!c.name.trim()) return setErr('Name is required')
     if (!c.typeId) return setErr('Choose a customer type')
@@ -174,7 +174,7 @@ export function CustomerForm({ customer, onClose }: { customer: Customer; onClos
         <Field label="Credit days" hint="Empty = use the customer type setting"><NumberInput min={0} max={365} step={1} value={c.creditDays} onChange={(v) => setC({ ...c, creditDays: v == null ? null : Math.round(v) })} placeholder={type ? `${type.creditDays} (type)` : ''} /></Field>
         <Field label="Credit limit (Rs)" hint="0 = no limit"><NumberInput min={0} value={c.creditLimit} onChange={(v) => setC({ ...c, creditLimit: v ?? 0 })} /></Field>
         <Field label="Notes"><input className="input" value={c.notes} onChange={(e) => setC({ ...c, notes: e.target.value })} /></Field>
-        <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="h-4 w-4" checked={c.active} onChange={(e) => setC({ ...c, active: e.target.checked })} /> Active</label>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="h-5 w-5 accent-brand-700" checked={c.active} onChange={(e) => setC({ ...c, active: e.target.checked })} /> Active</label>
       </div>
       {err && <p className="mt-3 text-sm font-medium text-red-600">{err}</p>}
     </Modal>
@@ -190,9 +190,28 @@ const statementCols: Column<StatementRow>[] = [
   { key: 'bal', header: 'Balance', align: 'right', render: (r) => <span className="font-medium">{rs(r.balance)}</span> },
 ]
 
+/** Phone layout for statement rows: reference + detail on the left, money on the right. */
+const statementCard = (kind: 'customer' | 'supplier') => (r: StatementRow) => {
+  const to = r.refId && r.type === 'Invoice' ? (kind === 'customer' ? `/sales/${r.refId}` : `/purchases/${r.refId}`) : null
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="font-medium">{to ? <Link className="text-brand-700 hover:underline" to={to}>{r.ref}</Link> : r.ref}</p>
+        <p className="text-xs text-stone-500">{r.date} · {r.type}{r.note ? ` · ${r.note}` : ''}</p>
+      </div>
+      <div className="shrink-0 text-right text-sm tabular-nums">
+        {r.debit ? <p>Billed {rs(r.debit)}</p> : null}
+        {r.credit ? <p className="text-brand-700">Paid {rs(r.credit)}</p> : null}
+        <p className="text-xs text-stone-500">Balance {rs(r.balance)}</p>
+      </div>
+    </div>
+  )
+}
+
 interface InvRow { id: number; invoiceNo: string; date: string; netTotal: number; due: number; status: 'paid' | 'partial' | 'unpaid'; overdue: boolean; dueDate: string }
 
 export function CustomerDetail() {
+  const nav = useNavigate()
   const { id } = useParams()
   const q = useQuery({ queryKey: ['customers', id], queryFn: () => api.get<{ customer: CustomerWithBalance; statement: StatementRow[] }>(`/customers/${id}`) })
   const [tab, setTab] = useState<'invoices' | 'statement'>('invoices')
@@ -201,7 +220,7 @@ export function CustomerDetail() {
   const [paying, setPaying] = useState(false)
   const [editing, setEditing] = useState(false)
   if (q.isLoading) return <Spinner />
-  if (q.error || !q.data) return <ErrorBox error={q.error ?? 'Not found'} />
+  if (q.error || !q.data) return <div><PageHeader title="Customer" back={{ to: '/customers', label: 'Customers' }} /><ErrorBox error={q.error ?? 'Not found'} /></div>
   const c = q.data.customer
   return (
     <div>
@@ -252,10 +271,10 @@ export function CustomerDetail() {
           empty="No invoices yet."
         />
       ) : (
-        <ClientTable rows={[...q.data.statement].reverse()} columns={statementCols} rowKey={(r) => `${r.type}-${r.ref}-${r.date}-${r.balance}`} empty="No transactions yet." />
+        <ClientTable rows={[...q.data.statement].reverse()} columns={statementCols} rowKey={(r) => `${r.type}-${r.ref}-${r.date}-${r.balance}`} empty="No transactions yet." mobileCard={statementCard('customer')} />
       )}
       {paying && <PaymentModal partyType="customer" partyId={c.id} onClose={() => setPaying(false)} />}
-      {editing && <CustomerForm customer={c} onClose={() => setEditing(false)} />}
+      {editing && <CustomerForm customer={c} onClose={() => setEditing(false)} onDeleted={() => nav('/customers', { replace: true })} />}
     </div>
   )
 }
@@ -346,21 +365,23 @@ export function SupplierDetail() {
   const { id } = useParams()
   const q = useQuery({ queryKey: ['suppliers', id], queryFn: () => api.get<{ supplier: SupplierWithBalance; statement: StatementRow[] }>(`/suppliers/${id}`) })
   const [paying, setPaying] = useState(false)
+  const [editing, setEditing] = useState(false)
   if (q.isLoading) return <Spinner />
-  if (q.error || !q.data) return <ErrorBox error={q.error ?? 'Not found'} />
+  if (q.error || !q.data) return <div><PageHeader title="Supplier" back={{ to: '/suppliers', label: 'Suppliers' }} /><ErrorBox error={q.error ?? 'Not found'} /></div>
   const x = q.data.supplier
   const cols = statementCols.map((c) => (c.key === 'ref' ? { ...c, render: (r: StatementRow) => (r.refId && r.type === 'Invoice' ? <Link className="text-brand-700 hover:underline" to={`/purchases/${r.refId}`}>{r.ref}</Link> : r.ref) } : c))
   return (
     <div>
-      <PageHeader back={{ to: '/suppliers', label: 'Suppliers' }} title={x.name} subtitle={[x.phone, x.address].filter(Boolean).join(' · ')} actions={<button className="btn-primary" onClick={() => setPaying(true)}><Wallet size={15} /> Pay supplier</button>} />
-      <div className="mb-5 grid grid-cols-3 gap-3">
+      <PageHeader back={{ to: '/suppliers', label: 'Suppliers' }} title={x.name} subtitle={[x.phone, x.address].filter(Boolean).join(' · ')} actions={<><button className="btn-secondary" onClick={() => setEditing(true)}><Pencil size={15} /> Edit</button><button className="btn-primary" onClick={() => setPaying(true)}><Wallet size={15} /> Pay supplier</button></>} />
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         <Stat label="Total billed" value={`Rs ${rs(x.billed)}`} hint={`${x.invoices} invoices`} />
         <Stat label="Paid" value={`Rs ${rs(x.paid)}`} tone="good" />
         <Stat label="To pay" value={`Rs ${rs(x.balance)}`} tone={x.balance > 0.004 ? 'warn' : 'default'} />
       </div>
       <h2 className="mb-2 font-semibold">Statement</h2>
-      <ClientTable rows={[...q.data.statement].reverse()} columns={cols} rowKey={(r) => `${r.type}-${r.ref}-${r.date}-${r.balance}`} />
+      <ClientTable rows={[...q.data.statement].reverse()} columns={cols} rowKey={(r) => `${r.type}-${r.ref}-${r.date}-${r.balance}`} mobileCard={statementCard('supplier')} />
       {paying && <PaymentModal partyType="supplier" partyId={x.id} onClose={() => setPaying(false)} />}
+      {editing && <SupplierForm supplier={x} onClose={() => setEditing(false)} />}
     </div>
   )
 }

@@ -44,6 +44,14 @@ export async function imagesOf(db: DB, kind: ImageInvoiceKind, invoiceId: number
   return list.flatMap((r) => [{ storage: r.storage, path: r.path }, { storage: r.storage, path: r.thumbPath }])
 }
 
+/** The real image type from the first bytes (a JPEG sent as "image/png" is still a JPEG). */
+function sniffImage(b: Buffer): 'image/jpeg' | 'image/png' | 'image/webp' | null {
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'
+  if (b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
+  if (b.length > 12 && b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp'
+  return null
+}
+
 export function imageRoutes(db: DB) {
   const r = Router()
 
@@ -79,12 +87,14 @@ export function imageRoutes(db: DB) {
       const bytes = Buffer.from(body.data, 'base64')
       const thumb = Buffer.from(body.thumb, 'base64')
       if (bytes.length > 1_600_000) throw new AppError(413, 'The photo is too large')
+      const mimeType = sniffImage(bytes)
+      if (!mimeType) throw new AppError(400, 'The file is not a JPEG, PNG or WebP image')
       const [{ next }] = await rows<{ next: number }>(db, sql`select coalesce(max(page), 0) + 1 as next from invoice_images where ${sql.raw(kind === 'sale' ? 'sales_invoice_id' : 'purchase_invoice_id')} = ${id}`)
-      const ext = body.mimeType === 'image/png' ? 'png' : body.mimeType === 'image/webp' ? 'webp' : 'jpg'
+      const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg'
       const key = `invoices/${kind}/${safe(no)}-${id}/p${next}`
       const saved: { storage: string; path: string }[] = []
       try {
-        const path = await saveFile(storage, `${key}.${ext}`, bytes, body.mimeType)
+        const path = await saveFile(storage, `${key}.${ext}`, bytes, mimeType)
         saved.push({ storage, path })
         const thumbPath = await saveFile(storage, `${key}-thumb.jpg`, thumb, 'image/jpeg')
         saved.push({ storage, path: thumbPath })
@@ -93,7 +103,7 @@ export function imageRoutes(db: DB) {
           .values({
             salesInvoiceId: kind === 'sale' ? id : null,
             purchaseInvoiceId: kind === 'purchase' ? id : null,
-            page: next, storage, path, thumbPath, mimeType: body.mimeType, size: bytes.length, width: body.width, height: body.height, sha256: body.sha256,
+            page: next, storage, path, thumbPath, mimeType, size: bytes.length, width: body.width, height: body.height, sha256: body.sha256,
           })
           .returning()
         res.status(201).json(toImage(row, no))

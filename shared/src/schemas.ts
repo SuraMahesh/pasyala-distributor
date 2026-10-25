@@ -1,9 +1,25 @@
 import { z } from 'zod'
+import { round2 } from './calc'
 import { ADJ_REASONS, CATEGORIES, PAY_METHODS } from './types'
 
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be yyyy-mm-dd')
-const money = z.number().finite().min(0, 'Must be 0 or more').max(1e10)
-const pct = z.number().finite().min(0, 'Must be 0–100').max(100, 'Must be 0–100')
+const isRealDate = (d: string) => {
+  const t = new Date(`${d}T00:00:00Z`)
+  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d
+}
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be yyyy-mm-dd').refine(isRealDate, 'Not a real date')
+/** yyyy-mm-dd and a real calendar day (for query parameters). */
+export const dateString = date
+
+/** "30 ml" / "30ml" → "30ML", "0.5 l" → "0.5L", "100 G" → "100g", "1 KG" → "1kg"; anything else stays as typed. */
+export function normaliseSize(s: string) {
+  const m = /^(\d+(?:\.\d+)?)\s*(ml|l|g|kg|mg)$/i.exec(s.trim())
+  if (!m) return s.trim()
+  const unit = m[2].toLowerCase()
+  return `${m[1]}${unit === 'ml' || unit === 'l' ? unit.toUpperCase() : unit}`
+}
+// amounts and percentages are kept to 2 decimals everywhere, so what is saved is exactly what prints
+const money = z.number().finite().min(0, 'Must be 0 or more').max(1e10).transform(round2)
+const pct = z.number().finite().min(0, 'Must be 0–100').max(100, 'Must be 0–100').transform(round2)
 const qty = z.number().int('Whole numbers only').min(0, 'Must be 0 or more').max(1e7)
 const text = (max = 200) => z.string().trim().max(max).default('')
 const reqText = (label: string, max = 200) => z.string().trim().min(1, `${label} is required`).max(max)
@@ -12,9 +28,9 @@ export const settingsSchema = z.object({
   name: reqText('Business name'),
   address: text(),
   phone: text(50),
-  email: text(100),
+  email: text(100).refine((v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Enter a valid email address'),
   invoicePrefix: text(10),
-  nextInvoiceNo: z.number().int().min(1),
+  nextInvoiceNo: z.number().int().min(1).max(1_000_000_000),
   footerNote: text(300),
   supplierCustomerCode: text(30),
   allowNegativeStock: z.boolean(),
@@ -31,7 +47,7 @@ export const customerTypeSchema = z.object({
 export const productSchema = z.object({
   code: z.string().trim().max(30).default('').transform((s) => s.toUpperCase()), // empty = auto from name + size
   name: reqText('Name', 120).transform((s) => s.toUpperCase()),
-  size: reqText('Size', 20),
+  size: reqText('Size', 20).transform(normaliseSize),
   category: z.enum(CATEGORIES),
   listPrice: money,
   supplierDiscPct: pct,
@@ -53,8 +69,8 @@ export const priceRuleSchema = z
   .object({
     productId: z.number().int(),
     customerTypeId: z.number().int(),
-    price: money.nullable(),
-    discPct: pct.nullable(),
+    price: money.nullable().refine((n) => n == null || n > 0, 'A fixed price must be more than 0'),
+    discPct: pct.nullable(), // 0 is allowed: it means "no discount for this type", overriding the type default
   })
   .refine((r) => r.price == null || r.discPct == null, 'Use either a fixed price or a discount %, not both')
 
@@ -65,8 +81,8 @@ export const promotionSchema = z
     name: text(80),
     productId: z.number().int(),
     customerTypeId: z.number().int().nullable(),
-    buyQty: z.number().int().min(1, 'Buy qty must be at least 1'),
-    freeQty: z.number().int().min(1, 'Free qty must be at least 1'),
+    buyQty: z.number().int().min(1, 'Buy qty must be at least 1').max(1_000_000),
+    freeQty: z.number().int().min(1, 'Free qty must be at least 1').max(1_000_000),
     startDate: date.nullable(),
     endDate: date.nullable(),
     active: z.boolean().default(true),
@@ -74,7 +90,7 @@ export const promotionSchema = z
   .refine((p) => !p.startDate || !p.endDate || p.startDate <= p.endDate, 'End date is before start date')
 
 export const customerSchema = z.object({
-  code: reqText('Code', 20),
+  code: reqText('Code', 20).transform((s) => s.toUpperCase()),
   name: reqText('Name', 120),
   typeId: z.number().int({ message: 'Choose a customer type' }),
   phone: text(50),
@@ -88,7 +104,7 @@ export const customerSchema = z.object({
 })
 
 export const supplierSchema = z.object({
-  code: reqText('Code', 20),
+  code: reqText('Code', 20).transform((s) => s.toUpperCase()),
   name: reqText('Name', 120),
   phone: text(50),
   address: text(),
@@ -113,7 +129,7 @@ const invoiceBase = {
   billDiscPct: pct,
   paidOnInvoice: money,
   notes: text(300),
-  lines: z.array(lineSchema).min(1, 'Add at least one item').max(500),
+  lines: z.array(lineSchema).min(1, 'Add at least one item').max(500, 'An invoice can have at most 500 lines'),
 }
 
 export const salesInvoiceSchema = z.object({ ...invoiceBase, customerId: z.number().int({ message: 'Choose a customer' }) })
@@ -126,15 +142,17 @@ export const purchaseInvoiceSchema = z.object({
   salesPerson: text(60),
 })
 
-export const paymentSchema = z.object({
-  date,
-  partyType: z.enum(['customer', 'supplier']),
-  partyId: z.number().int({ message: 'Choose who paid' }),
-  amount: money.refine((n) => n > 0, 'Amount must be more than 0'),
-  method: z.enum(PAY_METHODS).refine((m) => m !== 'Credit', 'Choose how it was paid'),
-  reference: text(60),
-  notes: text(300),
-})
+export const paymentSchema = z
+  .object({
+    date,
+    partyType: z.enum(['customer', 'supplier']),
+    partyId: z.number().int({ message: 'Choose who paid' }),
+    amount: money.refine((n) => n > 0, 'Amount must be more than 0'),
+    method: z.enum(PAY_METHODS).refine((m) => m !== 'Credit', 'Choose how it was paid'),
+    reference: text(60),
+    notes: text(300),
+  })
+  .refine((p) => p.method !== 'Cheque' || p.reference.length > 0, { message: 'Enter the cheque number', path: ['reference'] })
 
 export const adjustmentSchema = z.object({
   date,

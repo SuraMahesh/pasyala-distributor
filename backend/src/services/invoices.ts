@@ -202,6 +202,7 @@ export async function savePurchase(db: DB, input: PurchaseInvoiceInput, id?: num
 
     const [sup] = await tx.select().from(suppliers).where(eq(suppliers.id, input.supplierId))
     if (!sup) throw badRequest('Supplier does not exist')
+    if (!sup.active && existing?.supplierId !== sup.id) throw badRequest(`${sup.name} is inactive`)
 
     const dupWhere = existing
       ? and(eq(purchaseInvoices.supplierId, input.supplierId), eq(purchaseInvoices.invoiceNo, input.invoiceNo), ne(purchaseInvoices.id, existing.id))

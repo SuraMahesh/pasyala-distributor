@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { FileSpreadsheet, Pencil, Percent, Plus, ScanLine, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CATEGORIES, rs, suggestProductCode, type Movement, type Paged, type PriceQuote, type Product, type ProductWithStock, type Promotion, type CustomerType } from '@pjd/shared'
 import { useConfirm } from '../components/Confirm'
 import ProductScan from '../components/ProductScan'
@@ -56,7 +56,7 @@ function VariantChip({ p }: { p: ProductWithStock }) {
       to={`/products/${p.id}`}
       onClick={(e) => e.stopPropagation()}
       title={`${p.size} ${p.name} · stock code ${p.code}`}
-      className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ring-1 hover:ring-brand-400 ${low} ${p.active ? '' : 'opacity-50'}`}
+      className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ring-1 hover:ring-brand-400 ${low} ${p.active ? '' : 'opacity-50'}`}
     >
       <span className="font-semibold text-stone-900">{p.size}</span>
       <span className="tabular-nums">{p.sellPrice > 0 ? `Rs ${rs(p.sellPrice)}` : 'Free'}</span>
@@ -166,7 +166,7 @@ export default function Products() {
 
 const newProduct = (): Product => ({ id: 0, code: '', name: '', size: '30ML', category: 'Thailaya (Oil)', listPrice: 0, supplierDiscPct: 22, sellPrice: 0, reorderLevel: 5, openingStock: 0, active: true })
 
-export function ProductForm({ product, onClose }: { product: Product; onClose: () => void }) {
+export function ProductForm({ product, onClose, onDeleted }: { product: Product; onClose: () => void; onDeleted?: () => void }) {
   const isNew = !product.id
   const [p, setP] = useState(product)
   const [err, setErr] = useState('')
@@ -176,7 +176,7 @@ export function ProductForm({ product, onClose }: { product: Product; onClose: (
     onSuccess: onClose,
     silentError: true,
   })
-  const del = useApiMutation(() => api.del(`/products/${product.id}`), { success: 'Product deleted', onSuccess: onClose })
+  const del = useApiMutation(() => api.del(`/products/${product.id}`), { success: 'Product deleted', onSuccess: () => { onClose(); onDeleted?.() } })
 
   const submit = async () => {
     if (!p.name.trim()) return setErr('Enter the product name.')
@@ -228,9 +228,9 @@ export function ProductForm({ product, onClose }: { product: Product; onClose: (
         <Field label="Supplier list price (Rs)"><NumberInput min={0} step="0.01" value={p.listPrice} onChange={(v) => setP({ ...p, listPrice: v ?? 0 })} /></Field>
         <Field label="Base selling price (Rs)" hint="Customer type discounts & price rules apply on top of this"><NumberInput min={0} step="0.01" value={p.sellPrice} onChange={(v) => setP({ ...p, sellPrice: v ?? 0 })} /></Field>
         <Field label="Reorder level" hint="Alert when stock falls to this"><NumberInput min={0} step={1} value={p.reorderLevel} onChange={(v) => setP({ ...p, reorderLevel: Math.round(v ?? 0) })} /></Field>
-        <Field label="Opening stock" hint="Stock you had before using the system"><NumberInput min={0} step={1} value={p.openingStock} onChange={(v) => setP({ ...p, openingStock: Math.round(v ?? 0) })} /></Field>
+        <Field label="Opening stock" hint="Stock you had before using the system — valued at the current supplier list price and discount"><NumberInput min={0} step={1} value={p.openingStock} onChange={(v) => setP({ ...p, openingStock: Math.round(v ?? 0) })} /></Field>
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
-          <input type="checkbox" className="h-4 w-4" checked={p.active} onChange={(e) => setP({ ...p, active: e.target.checked })} /> Active (can be put on new invoices)
+          <input type="checkbox" className="h-5 w-5 accent-brand-700" checked={p.active} onChange={(e) => setP({ ...p, active: e.target.checked })} /> Active (can be put on new invoices)
         </label>
       </div>
       {err && <p className="mt-3 text-sm font-medium text-red-600">{err}</p>}
@@ -247,8 +247,7 @@ function BulkPrice({ filters, total, onClose }: { filters: Record<string, string
   const apply = useApiMutation((body: unknown) => api.post<{ updated: number }>('/products/bulk-price', body), { success: (r) => `${r.updated} prices updated`, onSuccess: onClose })
 
   const run = async () => {
-    const all = await api.get<Paged<{ id: number }>>('/products', { ...filters, page: 1, pageSize: 200 })
-    const ids = all.items.map((p) => p.id)
+    const ids = (await fetchAll<{ id: number }>('/products', filters)).map((p) => p.id) // every matching product, not just the first page
     const what = mode === 'fromList' ? `Set selling price = list price ${pct! >= 0 ? '+' : ''}${pct}%` : `Change ${field === 'sellPrice' ? 'selling' : 'list'} price by ${pct}%`
     const ok = await confirm({ title: `Update ${ids.length} products?`, message: `${what}, rounded to Rs ${roundTo || 0.01}.`, details: 'Existing invoices keep their saved prices.', tone: 'warning', confirmText: 'Update prices' })
     if (ok) apply.mutate({ ids, mode, field, pct: pct ?? 0, roundTo: roundTo ?? 0 })
@@ -291,6 +290,7 @@ interface ProductDetailRes {
 }
 
 export function ProductDetail() {
+  const nav = useNavigate()
   const { id } = useParams()
   const q = useQuery({ queryKey: ['products', id], queryFn: () => api.get<ProductDetailRes>(`/products/${id}`) })
   const [mpage, setMpage] = useState(1)
@@ -298,7 +298,7 @@ export function ProductDetail() {
   const moves = useQuery({ queryKey: ['products', id, 'movements', mpage, msize], queryFn: () => api.get<Paged<Movement>>(`/products/${id}/movements`, { page: mpage, pageSize: msize }) })
   const [edit, setEdit] = useState(false)
   if (q.isLoading) return <Spinner />
-  if (q.error || !q.data) return <ErrorBox error={q.error ?? 'Not found'} />
+  if (q.error || !q.data) return <div><PageHeader title="Product" back={{ to: '/products', label: 'Products' }} /><ErrorBox error={q.error ?? 'Not found'} /></div>
   const { product: p, prices, promotions } = q.data
 
   const mcols: Column<Movement>[] = [
@@ -384,7 +384,7 @@ export function ProductDetail() {
       <section className="card mt-5">
         <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
           <h2 className="font-semibold">Price by customer type</h2>
-          <Link to="/pricing?tab=grid" className="text-sm text-brand-700 hover:underline">Edit prices</Link>
+          <Link to="/pricing?tab=grid" className="-my-1 inline-flex min-h-8 items-center text-sm text-brand-700 hover:underline">Edit prices</Link>
         </div>
         <ul className="divide-y divide-stone-100">
           {prices.map(({ type, quote }) => {
@@ -423,7 +423,7 @@ export function ProductDetail() {
         onPageSize={(n) => { setMsize(n); setMpage(1) }}
         empty="No movements yet."
       />
-      {edit && <ProductForm product={p} onClose={() => setEdit(false)} />}
+      {edit && <ProductForm product={p} onClose={() => setEdit(false)} onDeleted={() => nav('/products', { replace: true })} />}
     </div>
   )
 }

@@ -1,12 +1,12 @@
 import type { ImageInvoiceKind, InvoiceImage } from '@pjd/shared'
-import { api, getToken } from './api'
+import { api, getImageToken } from './api'
 
-/** URL for an invoice photo (the login token goes in the link because <img> cannot send headers). */
+/** URL for an invoice photo (a read-only image token goes in the link because <img> cannot send headers). */
 export function imageUrl(id: number, opts: { thumb?: boolean; download?: boolean } = {}) {
   const p = new URLSearchParams()
   if (opts.thumb) p.set('size', 'thumb')
   if (opts.download) p.set('download', '1')
-  const t = getToken()
+  const t = getImageToken()
   if (t) p.set('t', t)
   const qs = p.toString()
   return api.url(`/images/${id}/file${qs ? `?${qs}` : ''}`)

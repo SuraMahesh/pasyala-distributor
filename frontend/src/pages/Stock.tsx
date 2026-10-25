@@ -156,6 +156,7 @@ function Adjustments({ s, set }: { s: ListState[0]; set: ListState[1] }) {
   const q = usePaged<AdjRow>('adjustments', '/adjustments', { search: s.search, page: s.page, pageSize: s.pageSize, sort: s.sort, dir: s.dir })
   const confirm = useConfirm()
   const del = useApiMutation((id: number) => api.del(`/adjustments/${id}`), { success: 'Adjustment removed — stock restored' })
+  const remove = async (a: AdjRow) => (await confirm({ title: 'Remove this adjustment?', message: `${a.productLabel}: ${a.qty > 0 ? '+' : ''}${a.qty} (${a.reason}) will be reversed.`, tone: 'danger', confirmText: 'Remove' })) && del.mutate(a.id)
   const columns: Column<AdjRow>[] = [
     { key: 'date', header: 'Date', sortKey: 'date', render: (a) => <span className="text-stone-500">{a.date}</span> },
     { key: 'item', header: 'Item', sortKey: 'product', render: (a) => <Link className="hover:underline" to={`/products/${a.productId}`}>{a.productLabel}</Link> },
@@ -165,7 +166,7 @@ function Adjustments({ s, set }: { s: ListState[0]; set: ListState[1] }) {
     {
       key: 'del', header: '', align: 'right', mobile: false,
       render: (a) => (
-        <button className="btn-ghost hover:text-red-600" aria-label="Delete" onClick={async () => (await confirm({ title: 'Remove this adjustment?', message: `${a.productLabel}: ${a.qty > 0 ? '+' : ''}${a.qty} (${a.reason}) will be reversed.`, tone: 'danger', confirmText: 'Remove' })) && del.mutate(a.id)}>
+        <button className="btn-ghost hover:text-red-600" aria-label="Delete" onClick={() => void remove(a)}>
           <Trash2 size={15} />
         </button>
       ),
@@ -188,6 +189,18 @@ function Adjustments({ s, set }: { s: ListState[0]; set: ListState[1] }) {
         sort={s.sort}
         dir={s.dir}
         onSort={(k, d) => set({ sort: k, dir: d })}
+        mobileCard={(a) => (
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium"><Link className="hover:underline" to={`/products/${a.productId}`}>{a.productLabel}</Link></p>
+              <p className="text-xs text-stone-500">{a.date} · {a.reason}{a.notes ? ` · ${a.notes}` : ''}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <span className={`font-semibold tabular-nums ${a.qty < 0 ? 'text-red-600' : 'text-brand-700'}`}>{a.qty > 0 ? '+' : ''}{a.qty}</span>
+              <button className="btn-ghost p-2 hover:text-red-600 max-md:min-h-10 max-md:min-w-10" aria-label="Delete" onClick={(e) => { e.stopPropagation(); void remove(a) }}><Trash2 size={16} /></button>
+            </div>
+          </div>
+        )}
         empty="No adjustments yet. Use Adjust stock for damage, expiry, returns or count corrections."
       />
     </>

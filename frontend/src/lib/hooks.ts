@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { Alert, CustomerType, Paged, PricingContext, Settings } from '@pjd/shared'
@@ -112,7 +112,8 @@ export function useApiMutation<TVars, TRes = unknown>(
   opts: { success?: string | ((r: TRes, v: TVars) => string); onSuccess?: (r: TRes, v: TVars) => void | Promise<void>; silentError?: boolean } = {},
 ) {
   const qc = useQueryClient()
-  return useMutation({
+  const busy = useRef(false) // set synchronously on the first click: a double-click arrives before React re-renders `isPending`
+  const m = useMutation({
     mutationFn: fn,
     onSuccess: async (r, v) => {
       await qc.invalidateQueries()
@@ -125,25 +126,16 @@ export function useApiMutation<TVars, TRes = unknown>(
     onError: (e) => {
       if (!opts.silentError) toast.error(errorMessage(e), { duration: 8000 })
     },
+    onSettled: () => {
+      busy.current = false
+    },
   })
+  const mutate = ((...args: Parameters<typeof m.mutate>) => {
+    if (busy.current) return
+    busy.current = true
+    m.mutate(...args)
+  }) as typeof m.mutate
+  return { ...m, mutate }
 }
 
-export function useDebounced<T>(value: T, ms = 300) {
-  const [v, setV] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms)
-    return () => clearTimeout(t)
-  }, [value, ms])
-  return v
-}
 
-export function useMediaQuery(q: string) {
-  const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches)
-  useEffect(() => {
-    const mq = window.matchMedia(q)
-    const h = () => setM(mq.matches)
-    mq.addEventListener('change', h)
-    return () => mq.removeEventListener('change', h)
-  }, [q])
-  return m
-}

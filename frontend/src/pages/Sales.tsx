@@ -161,7 +161,7 @@ function toDraft(inv: SalesInvoice): Draft {
     payMethod: inv.payMethod,
     billDiscPct: inv.billDiscPct,
     paidOnInvoice: inv.paidOnInvoice,
-    paidTouched: true,
+    paidTouched: Math.abs(inv.paidOnInvoice - inv.netTotal) > 0.004, // fully paid cash invoices keep following the total
     notes: inv.notes,
     lines: inv.lines.map((l) => ({ ...blankLine(), productId: l.productId, qty: l.qty, freeQty: l.freeQty, unitPrice: l.unitPrice, discPct: l.discPct, manualPrice: true, manualFree: true, priceNote: 'Saved price' })),
   }
@@ -189,7 +189,7 @@ export function SaleEdit() {
   )
 
   if (id && existing.isLoading) return <Spinner />
-  if (id && existing.error) return <ErrorBox error={existing.error} />
+  if (id && existing.error) return <div><PageHeader title="Edit sales invoice" back={{ to: '/sales', label: 'Sales' }} /><ErrorBox error={existing.error} /></div>
   const inv = existing.data
   const invoiceNo = inv?.invoiceNo ?? `${settings?.invoicePrefix ?? ''}${String(settings?.nextInvoiceNo ?? 1).padStart(6, '0')}`
   const onScanned = (s: ScanState) => { setScan(s); setScanNo((n) => n + 1) }
@@ -198,7 +198,7 @@ export function SaleEdit() {
 
   return (
     <div>
-      <PageHeader title={inv ? `Edit ${inv.invoiceNo}` : 'New sales invoice'} subtitle={inv ? `${inv.customerName} · ${inv.date}` : 'Prices fill in from the customer type, product price rules and promotions'} back={{ to: inv ? `/sales/${inv.id}` : '/sales', label: inv ? inv.invoiceNo : 'Sales' }} />
+      <PageHeader title={inv ? `Edit ${inv.invoiceNo}` : 'New sales invoice'} subtitle={inv ? `${inv.customerName} · ${inv.date}` : `${invoiceNo ? `Will be ${invoiceNo} · ` : ''}Prices fill in from the customer type, product price rules and promotions`} back={{ to: inv ? `/sales/${inv.id}` : '/sales', label: inv ? inv.invoiceNo : 'Sales' }} />
       {!inv && (scan ? <ScanReview scan={scan} kind="sale" onScanned={onScanned} onClear={() => { setScan(null); setScanNo((n) => n + 1) }} /> : <ScanUpload kind="sale" onScanned={onScanned} />)}
       <InvoiceEditor
         key={`${inv?.id ?? 'new'}-${scanNo}`}
@@ -272,7 +272,7 @@ export function SaleView() {
           issuer={settings ?? { name: '' }}
           party={{ code: cust?.code, name: inv.customerName, type: inv.customerTypeName, address: cust?.area }}
           partyLabel="Customer"
-          meta={[['Invoice No', inv.invoiceNo], ['Invoice Date', inv.date], ['Pay. Method', inv.payMethod], ['Due Date', inv.payMethod === 'Credit' ? inv.dueDate : ''], ['Notes', inv.notes]]}
+          meta={[['Invoice No', inv.invoiceNo], ['Invoice Date', inv.date], ['Pay. Method', inv.payMethod], ['Due Date', inv.due > 0.004 ? inv.dueDate : ''], ['Notes', inv.notes]]}
           lines={inv.lines}
           billDiscPct={inv.billDiscPct}
           paidAmount={inv.paid}
@@ -282,7 +282,7 @@ export function SaleView() {
     [inv, settings, cust],
   )
   if (q.isLoading) return <Spinner />
-  if (q.error || !inv) return <ErrorBox error={q.error ?? 'Not found'} onRetry={() => q.refetch()} />
+  if (q.error || !inv) return <div><PageHeader title="Sales invoice" back={{ to: '/sales', label: 'Sales' }} /><ErrorBox error={q.error ?? 'Not found'} onRetry={() => q.refetch()} /></div>
 
   const profit = inv.netTotal - inv.costTotal
   return (

@@ -3,9 +3,25 @@ import { createBrowserRouter, Link, RouterProvider, useRouteError } from 'react-
 import Layout from './components/Layout'
 import { Spinner } from './components/ui'
 
-// each page is downloaded only when first opened (faster start on phones)
+/** Shown when a page's code could not be downloaded (offline, or a deploy replaced the files). */
+function PageUnavailable() {
+  return (
+    <div className="mx-auto max-w-lg p-8 text-center">
+      <h1 className="text-xl font-semibold">Could not load this page</h1>
+      <p className="mt-2 text-sm text-stone-600">Check your internet connection, then try again.</p>
+      <button className="btn-primary mt-4" onClick={() => location.reload()}>Reload</button>
+    </div>
+  )
+}
+
+// each page is downloaded only when first opened (faster start on phones); one retry, then a friendly fallback
 const page = <M extends Record<string, unknown>>(load: () => Promise<M>, name: keyof M = 'default') => {
-  const C = lazy(() => load().then((m) => ({ default: m[name] as ComponentType })))
+  const C = lazy(() =>
+    load()
+      .catch(() => load())
+      .then((m) => ({ default: m[name] as ComponentType }))
+      .catch(() => ({ default: PageUnavailable as ComponentType })),
+  )
   return (
     <Suspense fallback={<Spinner />}>
       <C />
@@ -31,11 +47,14 @@ function RouteError() {
   )
 }
 
+// an error inside one page shows the message inside the shell (sidebar stays) instead of replacing the whole app
+const withErrorElement = <T extends object>(routes: T[]) => routes.map((r) => ({ errorElement: <RouteError />, ...r }))
+
 const router = createBrowserRouter([
   {
     element: <Layout />,
     errorElement: <RouteError />,
-    children: [
+    children: withErrorElement([
       { index: true, element: page(() => import('./pages/Dashboard')) },
       { path: 'sales', element: page(sales, 'SalesList') },
       { path: 'sales/new', element: page(sales, 'SaleEdit') },
@@ -56,9 +75,10 @@ const router = createBrowserRouter([
       { path: 'photos', element: page(() => import('./pages/InvoicePhotos')) },
       { path: 'payments', element: page(() => import('./pages/Payments')) },
       { path: 'reports', element: page(() => import('./pages/Reports')) },
+      { path: 'assistant', element: page(() => import('./pages/Assistant')) },
       { path: 'settings', element: page(() => import('./pages/Settings')) },
       { path: '*', element: <div className="p-8 text-center text-stone-600">Page not found. <Link className="text-brand-700 hover:underline" to="/">Go to dashboard</Link></div> },
-    ],
+    ]),
   },
 ])
 

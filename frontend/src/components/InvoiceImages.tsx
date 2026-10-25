@@ -168,7 +168,7 @@ export function Lightbox({ images, index, onIndex, onClose, onDelete, onRotated,
     return () => window.removeEventListener('keydown', h)
   }, [index, images.length, onClose, onIndex])
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-stone-950/95 text-white" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex flex-col bg-stone-950 text-white" role="dialog" aria-modal="true">
       <div className="flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <p className="min-w-0 flex-1 truncate text-sm font-medium">{title ? title(img) : `${img.invoiceNo} · page ${img.page} of ${images.length}`}</p>
         <button className="rounded-lg p-2 hover:bg-white/10" onClick={rotate} aria-label="Rotate" title="Turn the photo (saved)"><RotateCw size={20} /></button>

@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { scanInvoiceSchema, type RawScan } from '@pjd/shared'
 import type { DB } from '../db/client'
 import { customers, products, purchaseInvoices, suppliers } from '../db/schema'
-import { AppError, parse } from '../errors'
+import { anthropicError, AppError, parse } from '../errors'
 import { rows } from '../services/stock'
 import { buildScanResult, defaultScanner, type InvoiceScanner } from '../services/scan'
 
@@ -52,9 +52,9 @@ export function scanRoutes(db: DB, scanner: InvoiceScanner | null = defaultScann
       raw = await scanner({ file, catalog, parties })
     } catch (e) {
       if (e instanceof AppError) throw e
-      if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) throw new AppError(503, 'The ANTHROPIC_API_KEY on the server is not valid.')
-      if (e instanceof Anthropic.RateLimitError) throw new AppError(429, 'Too many scans right now — wait a minute and try again.')
       if (e instanceof Anthropic.BadRequestError) throw new AppError(400, `The file could not be read: ${e.message}`)
+      const mapped = anthropicError(e) // bad key, rate limit, provider outage — with the fix for the configured provider
+      if (mapped) throw mapped
       throw new AppError(502, 'Could not read the invoice right now — try again, or enter it by hand.')
     }
     res.json(buildScanResult(file.kind, raw, catalog, parties, existing, { lastBillDisc }))

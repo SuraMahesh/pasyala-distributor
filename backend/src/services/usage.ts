@@ -87,5 +87,5 @@ export function usageMessage(u: PurchaseUsage, action: 'delete' | 'reduce') {
     return `${i.label} (${i.used} of ${i.received} used — ${[...sales, ...(adj ? [`${adj} stock adjustment${adj > 1 ? 's' : ''}`] : [])].join(', ')})`
   })
   const verb = action === 'delete' ? `delete ${u.invoiceNo}` : `reduce these items on ${u.invoiceNo}`
-  return `Cannot ${verb} — items from it are already on sales invoices: ${parts.join('; ')}. Delete or edit those sales first.`
+  return `Cannot ${verb} — items from it are already used (sold or adjusted): ${parts.join('; ')}. Delete or edit those sales or adjustments first.`
 }

@@ -4,19 +4,20 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { Settings as S } from '@pjd/shared'
 import { useConfirm } from '../components/Confirm'
-import { Field, NumberInput, PageHeader, Spinner } from '../components/ui'
+import { ErrorBox, Field, NumberInput, PageHeader, Spinner } from '../components/ui'
 import { api, authHeaders } from '../lib/api'
 import { downloadExcel, type XCell, type XSheet } from '../lib/excel'
 import { useApiMutation, useSettings } from '../lib/hooks'
 
 export default function Settings() {
-  const { data, isLoading } = useSettings()
+  const { data, isLoading, error, refetch } = useSettings()
   const [form, setForm] = useState<S | null>(null)
   const confirm = useConfirm()
   useEffect(() => {
     if (data) setForm(data)
   }, [data])
   const save = useApiMutation((body: S) => api.put('/settings', body), { success: 'Settings saved' })
+  if (error) return <ErrorBox error={error} onRetry={() => refetch()} />
   if (isLoading || !form) return <Spinner />
   const set = (p: Partial<S>) => setForm({ ...form, ...p })
 
@@ -50,7 +51,7 @@ export default function Settings() {
       const titles: Record<string, string> = {
         products: 'Products', customerTypes: 'Customer types', customers: 'Customers', suppliers: 'Suppliers', priceRules: 'Price rules',
         promotions: 'Free issues', salesInvoices: 'Sales invoices', salesLines: 'Sales lines', purchaseInvoices: 'Purchases',
-        purchaseLines: 'Purchase lines', payments: 'Payments', stockAdjustments: 'Stock adjustments', settings: 'Settings',
+        purchaseLines: 'Purchase lines', payments: 'Payments', stockAdjustments: 'Stock adjustments', invoiceImages: 'Invoice photos', assistantRequests: 'Assistant requests', settings: 'Settings',
       }
       const sheets: XSheet[] = Object.entries(titles).map(([key, title]) => {
         const rows = d[key] ?? []
@@ -89,7 +90,7 @@ export default function Settings() {
           <Field label="Our customer code at the supplier" hint="Printed on purchase (GRN) copies"><input className="input" value={form.supplierCustomerCode} onChange={(e) => set({ supplierCustomerCode: e.target.value })} /></Field>
           <Field label="Invoice footer"><input className="input" value={form.footerNote} onChange={(e) => set({ footerNote: e.target.value })} /></Field>
           <label className="flex items-start gap-2 text-sm sm:col-span-2">
-            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={form.allowNegativeStock} onChange={(e) => set({ allowNegativeStock: e.target.checked })} />
+            <input type="checkbox" className="mt-0.5 h-5 w-5 accent-brand-700" checked={form.allowNegativeStock} onChange={(e) => set({ allowNegativeStock: e.target.checked })} />
             <span>Allow saving invoices when there is not enough stock <span className="block text-xs text-stone-500">Off = the system refuses to oversell (recommended).</span></span>
           </label>
         </div>

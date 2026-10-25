@@ -14,7 +14,7 @@ export class ApiError extends Error {
 
 // ---- login token (kept in this browser only)
 const TOKEN_KEY = 'pjd-token'
-export function getToken() {
+function getToken() {
   try {
     return localStorage.getItem(TOKEN_KEY) ?? ''
   } catch {
@@ -24,16 +24,37 @@ export function getToken() {
 export function setToken(t: string) {
   try {
     if (t) localStorage.setItem(TOKEN_KEY, t)
-    else localStorage.removeItem(TOKEN_KEY)
+    else {
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(IMG_TOKEN_KEY)
+      sessionStorage.removeItem('pjd-assistant-chat')
+    }
   } catch {
     /* private mode — stays logged in for this tab only */
+  }
+}
+// short-lived read-only token for photo <img> links (the server hands it out with /auth/me and /auth/login)
+const IMG_TOKEN_KEY = 'pjd-img-token'
+export function getImageToken() {
+  try {
+    return localStorage.getItem(IMG_TOKEN_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+export function setImageToken(t: string) {
+  try {
+    if (t) localStorage.setItem(IMG_TOKEN_KEY, t)
+    else localStorage.removeItem(IMG_TOKEN_KEY)
+  } catch {
+    /* ignore */
   }
 }
 export const authHeaders = (): Record<string, string> => (getToken() ? { Authorization: `Bearer ${getToken()}` } : {})
 
 type Params = Record<string, string | number | boolean | null | undefined>
 
-export function qs(params?: Params) {
+function qs(params?: Params) {
   if (!params) return ''
   const u = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') u.set(k, String(v))
@@ -53,7 +74,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new ApiError(0, 'Cannot reach the server. Check that the backend is running and you are online.')
   }
   const text = await res.text()
-  const data = text ? JSON.parse(text) : null
+  let data: { error?: string; details?: unknown } | null = null
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch {
+    throw new ApiError(res.status, res.ok ? 'The server sent an unreadable answer' : `Server error (${res.status}) — try again in a moment`)
+  }
   if (res.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event('pjd:logout'))
   if (!res.ok) throw new ApiError(res.status, data?.error ?? `Request failed (${res.status})`, data?.details)
   return data as T

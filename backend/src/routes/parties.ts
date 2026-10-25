@@ -45,7 +45,7 @@ export async function suppliersWithBalance(ex: Executor): Promise<SupplierWithBa
   })
 }
 
-async function statement(ex: Executor, kind: 'customer' | 'supplier', id: number): Promise<StatementRow[]> {
+export async function statement(ex: Executor, kind: 'customer' | 'supplier', id: number): Promise<StatementRow[]> {
   const inv = kind === 'customer'
     ? sql`select date::text, invoice_no as ref, id as "refId", net_total, paid_on_invoice, pay_method, created_at from sales_invoices where customer_id = ${id}`
     : sql`select date::text, invoice_no as ref, id as "refId", net_total, paid_on_invoice, pay_method, created_at from purchase_invoices where supplier_id = ${id}`
@@ -56,10 +56,10 @@ async function statement(ex: Executor, kind: 'customer' | 'supplier', id: number
   const pays = await rows<{ date: string; reference: string; id: number; amount: number; method: string; notes: string; created_at: string }>(ex, pay)
   const list: (Omit<StatementRow, 'balance'> & { order: string })[] = []
   for (const i of invoices) {
-    list.push({ date: i.date, type: 'Invoice', ref: i.ref, refId: i.refId, debit: i.net_total, credit: 0, note: i.pay_method, order: `${i.created_at}-0` })
-    if (i.paid_on_invoice > 0) list.push({ date: i.date, type: 'Paid on invoice', ref: i.ref, refId: i.refId, debit: 0, credit: i.paid_on_invoice, note: i.pay_method, order: `${i.created_at}-1` })
+    list.push({ date: i.date, type: 'Invoice', ref: i.ref, refId: i.refId, debit: i.net_total, credit: 0, note: i.pay_method, order: `${new Date(i.created_at).toISOString()}-0` })
+    if (i.paid_on_invoice > 0) list.push({ date: i.date, type: 'Paid on invoice', ref: i.ref, refId: i.refId, debit: 0, credit: i.paid_on_invoice, note: i.pay_method, order: `${new Date(i.created_at).toISOString()}-1` })
   }
-  for (const p of pays) list.push({ date: p.date, type: 'Payment', ref: p.reference || `PAY-${p.id}`, refId: null, debit: 0, credit: p.amount, note: [p.method, p.notes].filter(Boolean).join(' · '), order: `${p.created_at}-2` })
+  for (const p of pays) list.push({ date: p.date, type: 'Payment', ref: p.reference || `PAY-${p.id}`, refId: null, debit: 0, credit: p.amount, note: [p.method, p.notes].filter(Boolean).join(' · '), order: `${new Date(p.created_at).toISOString()}-2` })
   list.sort((a, b) => a.date.localeCompare(b.date) || a.order.localeCompare(b.order))
   let bal = 0
   return list.map(({ order: _o, ...r }) => ({ ...r, balance: (bal = round2(bal + r.debit - r.credit)) }))

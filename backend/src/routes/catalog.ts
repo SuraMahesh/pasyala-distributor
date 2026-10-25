@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   bulkPriceSchema,
@@ -60,7 +60,7 @@ export async function productsWithStock(ex: Executor): Promise<ProductWithStock[
     }
     if (paidLeft > 0) {
       // more on hand than all GRNs (stock added by adjustment) — value it like the newest refill
-      const ref = layers[0] ?? opening
+      const ref = layers.find((l) => l.unitPrice > 0) ?? layers[0] ?? opening // skip a free-only refill: Rs 0 is not a cost
       const extra = batchValue({ ...ref, invoiceId: null, invoiceNo: 'Stock adjustment', date: '' }, paidLeft, 0)
       batches.push(extra)
     }
@@ -106,9 +106,21 @@ const productFilters = listQuerySchema.extend({
   stock: z.enum(['', 'in', 'low', 'out']).default(''),
 })
 
-/** item code: the supplier's code if given, else category + name + size (THMN0030 style); -2, -3 … if taken */
+/**
+ * Creates a product. Name + size must be unique (that pair IS the product). The item code is the supplier's code
+ * when typed — refused if another product already has it — else category + name + size (THMN0030 style), with
+ * -2, -3 … when two different products would get the same generated code.
+ */
 async function createProduct(tx: Executor, input: ProductInput) {
-  const base = input.code || suggestProductCode(input.name, input.size, input.category)
+  const [dup] = await tx.select({ code: products.code }).from(products).where(and(eq(products.name, input.name), eq(products.size, input.size)))
+  if (dup) throw conflict(`${input.size} ${input.name} already exists (${dup.code}) — edit that product or add a different size`)
+  if (input.code) {
+    const [clash] = await tx.select({ name: products.name, size: products.size }).from(products).where(eq(products.code, input.code))
+    if (clash) throw conflict(`Code ${input.code} is already used by ${clash.size} ${clash.name}`)
+    const [created] = await tx.insert(products).values(input).returning()
+    return created
+  }
+  const base = suggestProductCode(input.name, input.size, input.category)
   const taken = new Set((await rows<{ code: string }>(tx, sql`select code from products where code like ${base + '%'}`)).map((r) => r.code))
   let code = base
   for (let n = 2; taken.has(code); n++) code = `${base}-${n}`
@@ -202,6 +214,8 @@ export function catalogRoutes(db: DB) {
   r.get('/products/:id/movements', async (req, res) => {
     const id = idParam(req.params.id)
     const q = listQuerySchema.parse(req.query)
+    const [exists] = await db.select({ id: products.id }).from(products).where(eq(products.id, id))
+    if (!exists) throw notFound('Product')
     const list = (await productMovements(db, id)).reverse() // newest first
     const { filtered: _f, ...page } = paginate(list, q, {})
     res.json(page)
@@ -244,6 +258,8 @@ export function catalogRoutes(db: DB) {
     const row = await db.transaction(async (tx) => {
       const [old] = await tx.select().from(products).where(eq(products.id, id)).for('update')
       if (!old) throw notFound('Product')
+      const [dup] = await tx.select({ code: products.code }).from(products).where(and(eq(products.name, input.name), eq(products.size, input.size), ne(products.id, id)))
+      if (dup) throw conflict(`${input.size} ${input.name} already exists (${dup.code})`)
       // lowering opening stock must not push on-hand below zero
       const delta = input.openingStock - old.openingStock
       if (delta < 0) await assertStockAvailable(tx, new Map([[id, delta]]))
@@ -300,7 +316,8 @@ export function catalogRoutes(db: DB) {
     const id = idParam(req.params.id)
     const [used] = await db.select({ id: customers.id }).from(customers).where(eq(customers.typeId, id)).limit(1)
     if (used) throw conflict('Customers use this type. Move them to another type first.')
-    await db.delete(customerTypes).where(eq(customerTypes.id, id))
+    const [row] = await db.delete(customerTypes).where(eq(customerTypes.id, id)).returning({ id: customerTypes.id })
+    if (!row) throw notFound('Customer type')
     res.json({ ok: true })
   })
 
@@ -375,7 +392,8 @@ export function catalogRoutes(db: DB) {
     res.json(row)
   })
   r.delete('/promotions/:id', async (req, res) => {
-    await db.delete(promotions).where(eq(promotions.id, idParam(req.params.id)))
+    const [row] = await db.delete(promotions).where(eq(promotions.id, idParam(req.params.id))).returning({ id: promotions.id })
+    if (!row) throw notFound('Promotion')
     res.json({ ok: true })
   })
 

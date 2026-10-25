@@ -7,6 +7,7 @@ import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { addDays, invoiceTotals, todayLK } from '@pjd/shared'
 import { createApp } from './app'
+import { _resetAuthLimits } from './auth'
 import { openDatabase, runMigrations, type Database } from './db/client'
 import { PRINTED_TOTALS, seed } from './db/seed'
 import type { RawScan } from './services/scan'
@@ -149,7 +150,7 @@ describe('sales invoices', () => {
     const before = (await api.get('/api/settings')).body.nextInvoiceNo
     const res = await api.post('/api/sales').send({ date: today, customerId: ids.shop, payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [line('RSDH1000', 51)] })
     expect(res.status).toBe(409)
-    expect(res.body.error).toMatch(/Not enough stock: 1kg DHATHRI RASAYANA \(RSDH1000\) has 50, needs 51/)
+    expect(res.body.error).toMatch(/Not enough stock: 1kg DHATHRI RASAYANA \(RSDH1000\) is short by 1 \(50 in stock now\)/)
     expect((await api.get('/api/settings')).body.nextInvoiceNo).toBe(before)
     expect((await product('RSDH1000')).onHand).toBe(50)
   })
@@ -226,8 +227,8 @@ describe('purchases and stock safety', () => {
     const list = (await api.get('/api/purchases?search=HOSI005967')).body
     const res = await api.delete(`/api/purchases/${list.items[0].id}`)
     expect(res.status).toBe(409)
-    expect(res.body.error).toMatch(/^Cannot delete HOSI005967 — items from it are already on sales invoices: .*PJD-\d{6}/)
-    expect(res.body.error).toMatch(/Delete or edit those sales first/)
+    expect(res.body.error).toMatch(/^Cannot delete HOSI005967 — items from it are already used \(sold or adjusted\): .*PJD-\d{6}/)
+    expect(res.body.error).toMatch(/Delete or edit those sales or adjustments first/)
   })
 
   it('delete / edit guard: refused while sold, nothing changes; allowed once stock is back', async () => {
@@ -244,7 +245,7 @@ describe('purchases and stock safety', () => {
     // delete refused: 6 of its 10 are sold
     const del = await api.delete(`/api/purchases/${a.body.id}`)
     expect(del.status).toBe(409)
-    expect(del.body.error).toBe(`Cannot delete GUARD-A — items from it are already on sales invoices: 30ML GUARD TEST OIL (6 of 10 used — ${sale.body.invoiceNo}). Delete or edit those sales first.`)
+    expect(del.body.error).toBe(`Cannot delete GUARD-A — items from it are already used (sold or adjusted): 30ML GUARD TEST OIL (6 of 10 used — ${sale.body.invoiceNo}). Delete or edit those sales or adjustments first.`)
     const usage = (await api.get(`/api/purchases/${a.body.id}/usage`)).body
     expect(usage).toMatchObject({ used: true, items: [{ productId: pid, received: 10, used: 6, usedBy: [{ kind: 'sale', id: sale.body.id, ref: sale.body.invoiceNo, qty: 6 }] }] })
 
@@ -358,18 +359,45 @@ describe('password login', () => {
       expect((await api.get('/api/products').set({ Authorization: `Bearer ${ok.body.token}x` })).status).toBe(401)
       // invoice photos: <img> cannot send a header — the token in the link (?t=) works, but only for photo files
       const p = (await api.get('/api/purchases?pageSize=1').set(auth)).body.items[0]
-      const img = await api.post(`/api/purchases/${p.id}/images`).set(auth).send({ mimeType: 'image/jpeg', data: Buffer.from('x'.repeat(300)).toString('base64'), thumb: Buffer.from('t'.repeat(80)).toString('base64'), sha256: 'a'.repeat(64), width: 10, height: 10 })
+      const img = await api.post(`/api/purchases/${p.id}/images`).set(auth).send({ mimeType: 'image/jpeg', data: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(300, 'x')]).toString('base64'), thumb: Buffer.from('t'.repeat(80)).toString('base64'), sha256: 'a'.repeat(64), width: 10, height: 10 })
       expect(img.status).toBe(201)
       expect((await api.get(`/api/images/${img.body.id}/file`)).status).toBe(401)
-      expect((await api.get(`/api/images/${img.body.id}/file?t=${encodeURIComponent(ok.body.token)}`)).status).toBe(200)
-      expect((await api.get(`/api/images/${img.body.id}/file?size=thumb&t=${encodeURIComponent(ok.body.token)}`)).status).toBe(200)
-      expect((await api.get(`/api/products?t=${encodeURIComponent(ok.body.token)}`)).status).toBe(401) // not for other pages
+      // … but only the short-lived read-only image token works there, never the session token itself
+      expect(ok.body.imageToken).toBeTruthy()
+      expect((await api.get(`/api/images/${img.body.id}/file?t=${encodeURIComponent(ok.body.token)}`)).status).toBe(401)
+      expect((await api.get(`/api/images/${img.body.id}/file?t=${encodeURIComponent(ok.body.imageToken)}`)).status).toBe(200)
+      expect((await api.get(`/api/images/${img.body.id}/file?size=thumb&t=${encodeURIComponent(ok.body.imageToken)}`)).status).toBe(200)
+      expect((await api.get(`/api/products?t=${encodeURIComponent(ok.body.imageToken)}`)).status).toBe(401) // not for other pages
+      expect((await api.get('/api/products').set({ Authorization: `Bearer ${ok.body.imageToken}` })).status).toBe(401) // nor as a session
+      expect((await api.get('/api/auth/me').set(auth)).body.imageToken).toBeTruthy()
       expect((await api.delete(`/api/images/${img.body.id}`).set(auth)).status).toBe(200)
       process.env.APP_PASSWORD = 'changed'
       expect((await api.get('/api/products').set(auth)).status).toBe(401) // changing the password logs everyone out
     } finally {
       delete process.env.APP_PASSWORD
+      _resetAuthLimits()
     }
+  }, 30_000)
+
+  it('locks login for a while after too many wrong passwords', async () => {
+    process.env.APP_PASSWORD = 'secret-123'
+    try {
+      _resetAuthLimits()
+      for (let i = 0; i < 10; i++) expect((await api.post('/api/auth/login').send({ password: `wrong-${i}` })).status).toBe(401)
+      const blocked = await api.post('/api/auth/login').send({ password: 'secret-123' }) // even the right password waits now
+      expect(blocked.status).toBe(429)
+      expect(blocked.headers['retry-after']).toBeTruthy()
+      _resetAuthLimits()
+      expect((await api.post('/api/auth/login').send({ password: 'secret-123' })).status).toBe(200)
+    } finally {
+      delete process.env.APP_PASSWORD
+      _resetAuthLimits()
+    }
+  }, 30_000)
+
+  it('rejects an oversized body with 413, not a generic 500', async () => {
+    const big = await api.post('/api/products').set('content-type', 'application/json').send(`{"name":"${'x'.repeat(6_500_000)}"}`)
+    expect(big.status).toBe(413)
   })
 })
 
@@ -379,7 +407,9 @@ describe('automatic item codes', () => {
     const a = await api.post('/api/products').send(body)
     expect(a.status).toBe(201)
     expect(a.body.code).toBe('LPSB0050')
-    const b = await api.post('/api/products').send({ ...body, code: '' })
+    const dup = await api.post('/api/products').send({ ...body, code: '' })
+    expect(dup.status).toBe(409) // same name + size is the same product
+    const b = await api.post('/api/products').send({ ...body, code: '', name: 'Sudu Balm' }) // different product, same initials → same code, suffixed
     expect(b.body.code).toBe('LPSB0050-2')
     const edit = await api.put(`/api/products/${a.body.id}`).send({ ...a.body, code: 'HACKED', name: 'SIDDHALEPA BALM' })
     expect(edit.status).toBe(200)
@@ -511,12 +541,24 @@ describe('scan invoice image → draft (nothing saved until confirmed)', () => {
 })
 
 describe('invoice photos', () => {
-  // a real (tiny) JPEG is not needed — the server stores bytes as given
+  // the server checks the first bytes (JPEG / PNG / WebP signature) and stores the rest as given
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0])
   const photo = (seed: string) => {
-    const bytes = Buffer.from(`fake-jpeg-${seed}-`.repeat(40))
+    const bytes = Buffer.concat([JPEG, Buffer.from(`fake-jpeg-${seed}-`.repeat(40))])
     return { mimeType: 'image/jpeg', data: bytes.toString('base64'), thumb: Buffer.from(`thumb-${seed}`.repeat(10)).toString('base64'), sha256: createHash('sha256').update(seed).digest('hex'), width: 1800, height: 2400 }
   }
   const files = () => readdirSync(uploadDir, { recursive: true }).filter((f) => String(f).match(/\.(jpg|png|webp)$/))
+
+  it('stores the real image type and refuses files that are not images', async () => {
+    const p = (await api.get('/api/purchases?search=HOSI005942')).body.items[0]
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(200, 1)])
+    const asJpeg = await api.post(`/api/purchases/${p.id}/images`).send({ ...photo('png-as-jpeg'), data: png.toString('base64') })
+    expect(asJpeg.status).toBe(201)
+    expect((await api.get(`/api/images/${asJpeg.body.id}/file`)).headers['content-type']).toMatch(/image\/png/) // served as what it really is
+    expect((await api.delete(`/api/images/${asJpeg.body.id}`)).status).toBe(200)
+    const junk = await api.post(`/api/purchases/${p.id}/images`).send({ ...photo('junk'), data: Buffer.from('<html>not an image</html>'.repeat(20)).toString('base64') })
+    expect(junk.status).toBe(400)
+  })
 
   it('attaches photos to a purchase, serves them, numbers the pages', async () => {
     const p = (await api.get('/api/purchases?search=HOSI005920')).body.items[0]
@@ -589,5 +631,94 @@ describe('Products → Scan: import new products and price changes', () => {
     // put things back for other tests
     await api.post('/api/products/import').send({ update: [{ id: before.id, listPrice: before.listPrice, supplierDiscPct: before.supplierDiscPct, sellPrice: before.sellPrice }] })
     expect((await api.delete(`/api/products/${res.body.created[0].id}`)).status).toBe(200)
+  })
+})
+
+describe('UAT fixes: suppliers, products, dates, messages', () => {
+  const product = { code: '', name: 'Uat Fix Oil', size: '30ML', category: 'Other', listPrice: 100, supplierDiscPct: 0, sellPrice: 120, reorderLevel: 0, openingStock: 0, active: true }
+
+  it('refuses an inactive supplier on a new GRN', async () => {
+    const s = await api.post('/api/suppliers').send({ code: 'SUP-INACT', name: 'Closed Supplier', phone: '', address: '', creditDays: 0, notes: '', active: false })
+    expect(s.status).toBe(201)
+    const p = (await api.get('/api/products/options')).body[0]
+    const g = await api.post('/api/purchases').send({ date: '2026-10-20', payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', supplierId: s.body.id, invoiceNo: 'INACT-1', orderNo: '', salesPerson: '', lines: [{ productId: p.id, qty: 1, freeQty: 0, unitPrice: 100, discPct: 0 }] })
+    expect(g.status).toBe(400)
+    expect(g.body.error).toMatch(/inactive/)
+  })
+
+  it('a typed item code that is already used is refused, not renamed', async () => {
+    const first = (await api.get('/api/products/options')).body[0]
+    const r = await api.post('/api/products').send({ ...product, code: first.code, name: 'Code Clash' })
+    expect(r.status).toBe(409)
+    expect(r.body.error).toContain(first.code)
+  })
+
+  it('normalises sizes, so "30 ml" and "30ML" are one variant, and refuses the duplicate', async () => {
+    const a = await api.post('/api/products').send({ ...product, size: '30 ml' })
+    expect(a.status).toBe(201)
+    expect(a.body.size).toBe('30ML')
+    expect((await api.post('/api/products').send({ ...product, size: '30ML' })).status).toBe(409)
+    const c = await api.post('/api/products').send({ ...product, name: 'Uat Fix Powder', size: '100 G' })
+    expect(c.body.size).toBe('100g')
+    const renamed = await api.put(`/api/products/${c.body.id}`).send({ ...c.body, name: 'UAT FIX OIL', size: '30ML' })
+    expect(renamed.status).toBe(409) // editing into an existing name + size is refused too
+  })
+
+  it('impossible dates are a 400, not a 500', async () => {
+    const p = (await api.get('/api/products/options')).body[0]
+    for (const date of ['2026-02-31', '2026-13-01']) {
+      const r = await api.post('/api/adjustments').send({ date, productId: p.id, qty: 1, reason: 'Other', notes: '' })
+      expect(r.status).toBe(400)
+      expect(r.body.error).toMatch(/date/i)
+    }
+  })
+
+  it('404 for deleting a missing promotion or listing movements of a missing product', async () => {
+    expect((await api.delete('/api/promotions/999999')).status).toBe(404)
+    expect((await api.get('/api/products/999999/movements')).status).toBe(404)
+  })
+
+  it('explains wrongly typed or missing fields in plain words', async () => {
+    const r = await api.get('/api/products?page=abc')
+    expect(r.status).toBe(400)
+    expect(r.body.error).toBe('Page must be a number')
+    const missing = await api.post('/api/products').send({ ...product, size: undefined })
+    expect(missing.body.error).toBe('Size is required')
+  })
+
+  it('a fixed price rule of 0 is refused', async () => {
+    const p = (await api.get('/api/products/options')).body[0]
+    const types = (await api.get('/api/customer-types')).body
+    const r = await api.put('/api/price-rules').send({ rules: [{ productId: p.id, customerTypeId: types[0].id, price: 0, discPct: null }] })
+    expect(r.status).toBe(400)
+  })
+})
+
+describe('UAT fixes: customers, payments, rounding', () => {
+  it('customer codes are case-insensitive (stored upper-case)', async () => {
+    const types = (await api.get('/api/customer-types')).body
+    const a = await api.post('/api/customers').send({ code: 'case-1', name: 'Case One', typeId: types[0].id, phone: '', address: '', area: '', discPct: null, creditLimit: 0, creditDays: null, notes: '', active: true })
+    expect(a.status).toBe(201)
+    expect(a.body.code).toBe('CASE-1')
+    expect((await api.post('/api/customers').send({ code: 'CASE-1', name: 'Case Two', typeId: types[0].id, phone: '', address: '', area: '', discPct: null, creditLimit: 0, creditDays: null, notes: '', active: true })).status).toBe(409)
+  })
+
+  it('a cheque payment needs the cheque number; deleting a missing customer type is a 404', async () => {
+    const c = (await api.get('/api/customers?pageSize=1')).body.items[0]
+    const r = await api.post('/api/payments').send({ date: '2026-10-20', partyType: 'customer', partyId: c.id, amount: 10, method: 'Cheque', reference: '', notes: '' })
+    expect(r.status).toBe(400)
+    expect(r.body.error).toMatch(/cheque number/i)
+    expect((await api.delete('/api/customer-types/999999')).status).toBe(404)
+  })
+
+  it('prices and discounts are rounded to cents before saving, so the ledger and the printed invoice agree', async () => {
+    const c = (await api.get('/api/customers?pageSize=1')).body.items[0]
+    const p = (await api.get('/api/products/options')).body.find((x: { onHand: number }) => x.onHand > 10)
+    const r = await api.post('/api/sales').send({ date: '2026-10-20', payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', customerId: c.id, lines: [{ productId: p.id, qty: 3, freeQty: 0, unitPrice: 1.005, discPct: 0 }] })
+    expect(r.status).toBe(201)
+    const inv = (await api.get(`/api/sales/${r.body.id}`)).body
+    expect(inv.lines[0].unitPrice).toBe(1.01)
+    expect(inv.netTotal).toBe(3.03) // 3 × 1.01, the same figure the printed document recomputes
+    expect((await api.delete(`/api/sales/${r.body.id}`)).status).toBe(200)
   })
 })

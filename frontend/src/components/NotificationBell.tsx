@@ -9,7 +9,7 @@ const COLOR: Record<AlertLevel, string> = { danger: 'text-red-600', warning: 'te
 
 /** Bell with live alerts: stock outs, low stock, overdue customers, credit limits, supplier dues, promotions ending. */
 export default function NotificationBell({ variant = 'icon' }: { variant?: 'icon' | 'sidebar' }) {
-  const { data = [] } = useAlerts()
+  const { data = [], error, refetch } = useAlerts()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const urgent = data.filter((a) => a.level !== 'info').length
@@ -17,8 +17,13 @@ export default function NotificationBell({ variant = 'icon' }: { variant?: 'icon
   useEffect(() => {
     if (!open) return
     const h = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
     document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
+    document.addEventListener('keydown', k)
+    return () => {
+      document.removeEventListener('mousedown', h)
+      document.removeEventListener('keydown', k)
+    }
   }, [open])
 
   return (
@@ -52,7 +57,9 @@ export default function NotificationBell({ variant = 'icon' }: { variant?: 'icon
       {open && (
         <div className={`z-50 max-h-[70vh] overflow-y-auto rounded-xl border border-stone-200 bg-white text-stone-800 shadow-xl ${variant === 'sidebar' ? 'absolute top-0 left-full ml-3 w-96' : 'fixed inset-x-2 top-14 sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-96'}`}>
           <div className="sticky top-0 border-b border-stone-200 bg-white px-4 py-2.5 text-sm font-semibold">Notifications</div>
-          {data.length === 0 ? (
+          {error ? (
+            <p className="px-4 py-6 text-sm text-red-700">Could not load notifications. <button className="font-medium underline" onClick={() => void refetch()}>Try again</button></p>
+          ) : data.length === 0 ? (
             <p className="flex items-center gap-2 px-4 py-6 text-sm text-stone-500"><CheckCircle2 size={18} className="text-brand-600" /> All good — nothing needs attention.</p>
           ) : (
             <ul className="divide-y divide-stone-100">

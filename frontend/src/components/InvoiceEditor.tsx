@@ -1,6 +1,7 @@
 import { AlertTriangle, Eye, Gift, Loader2, Plus, Save, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useBlocker } from 'react-router-dom'
+import { toast } from 'sonner'
 import {
   invoiceTotals,
   lineNet,
@@ -128,6 +129,7 @@ export default function InvoiceEditor({
   const [preview, setPreview] = useState(false)
   const [done, setDone] = useState(false)
   const [initialJson] = useState(() => JSON.stringify(initial))
+  const detailsRef = useRef<HTMLDetailsElement>(null) // phones: the collapsible totals panel
   const dirty = !done && JSON.stringify(d) !== initialJson
 
   const pmap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
@@ -172,6 +174,11 @@ export default function InvoiceEditor({
   const overLimit = mode === 'sale' && customer && customer.creditLimit > 0 && projected > customer.creditLimit
 
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }))
+  // promotions are date-bound, so a new date re-prices every line that was not typed by hand
+  const setDate = (date: string) => {
+    setD((x) => ({ ...x, date, lines: mode === 'sale' ? x.lines.map((l) => priceLine(l, pmap.get(l.productId!), customers.find((c) => c.id === x.partyId), ctx, date, mode)) : x.lines }))
+    setErrors((e) => ({ ...e, date: '' }))
+  }
   const setLine = (key: string, patch: Partial<DraftLine>, reprice = false) =>
     setD((x) => ({
       ...x,
@@ -198,10 +205,12 @@ export default function InvoiceEditor({
     if (!d.partyId) e.party = `Choose a ${mode === 'sale' ? 'customer' : 'supplier'}`
     if (mode === 'purchase' && !d.invoiceNo.trim()) e.invoiceNo = 'Enter the supplier invoice number'
     if (!validLines.length) e.lines = 'Add at least one item'
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) e.date = 'Enter the invoice date'
     d.lines.forEach((l, i) => {
       if (!l.productId && l.imageText) e[`line${l.key}`] = `Line ${i + 1}: choose the product for "${l.imageText}" or delete the line`
       if (l.productId && l.qty + l.freeQty <= 0) e[`line${l.key}`] = `Line ${i + 1}: qty must be more than 0`
       if (l.discPct < 0 || l.discPct > 100) e[`line${l.key}`] = `Line ${i + 1}: discount must be 0–100`
+      if (l.unitPrice < 0) e[`line${l.key}`] = `Line ${i + 1}: price cannot be negative`
     })
     if (paid > t.netTotal + 0.004) e.paid = 'Paid now cannot be more than the net total'
     setErrors(e)
@@ -211,6 +220,8 @@ export default function InvoiceEditor({
   const save = async () => {
     const problems = validate()
     if (problems.length) {
+      if (detailsRef.current) detailsRef.current.open = true // the "paid now" error lives inside the totals panel on phones
+      toast.error(problems[0])
       document.querySelector('[data-error="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
@@ -221,6 +232,7 @@ export default function InvoiceEditor({
       ...(belowCost.length ? [`${belowCost.length} item(s) priced below cost.`] : []),
       ...(totalOff ? [`Lines add up to Rs ${rs(t.netTotal)} but the image shows Rs ${rs(printedTotal!)}.`] : []),
       ...(numberOff ? [`The photo reads invoice ${imageInvoiceNo}, but you entered ${d.invoiceNo}. The photo will be attached to ${d.invoiceNo} — make sure it is the same paper.`] : []),
+      ...(d.payMethod !== 'Credit' && paid + 0.004 < t.netTotal ? [`Paid now (Rs ${rs(paid)}) is less than the net total — the invoice will be saved as part paid.`] : []),
     ]
     const ok = await confirm({
       title: isEditing ? 'Save changes to this invoice?' : scanned ? 'Save invoice read from image?'  : mode === 'sale' ? 'Create this sales invoice?' : 'Save this supplier invoice?',
@@ -276,7 +288,7 @@ export default function InvoiceEditor({
             ) : (
               <select className="input" value={d.partyId ?? ''} onChange={(e) => chooseParty(Number(e.target.value))}>
                 <option value="">— select —</option>
-                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {(partyList as typeof suppliers).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             )}
           </div>
@@ -289,8 +301,8 @@ export default function InvoiceEditor({
             </span>
           )}
         </Field>
-        <Field label="Date">
-          <input type="date" className="input" value={d.date} onChange={(e) => set({ date: e.target.value })} />
+        <Field label="Date" error={errors.date}>
+          <input data-error={!!errors.date} type="date" className="input" value={d.date} onChange={(e) => setDate(e.target.value)} />
         </Field>
         <Field label="Payment method">
           <select className="input" value={d.payMethod} onChange={(e) => set({ payMethod: e.target.value as PayMethod })}>
@@ -321,7 +333,7 @@ export default function InvoiceEditor({
 
       {/* lines */}
       <div className="card">
-        <div className="hidden grid-cols-[1.75rem_minmax(200px,1fr)_4.5rem_4.5rem_4rem_6.5rem_4.5rem_7rem_2.25rem] gap-2 border-b border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold tracking-wide text-stone-500 uppercase md:grid">
+        <div className="hidden grid-cols-[1.5rem_minmax(120px,1fr)_3.5rem_3.75rem_3.75rem_5.5rem_3.75rem_5.5rem_2rem] gap-1.5 border-b border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold tracking-wide text-stone-500 uppercase md:grid xl:grid-cols-[1.75rem_minmax(200px,1fr)_4.5rem_4.5rem_4rem_6.5rem_4.5rem_7rem_2.25rem] xl:gap-2">
           <span>#</span><span>Item</span><span className="text-right">{mode === 'sale' ? 'Stock' : ''}</span><span className="text-right">Qty</span><span className="text-right">Free</span><span className="text-right">Unit price</span><span className="text-right">Disc %</span><span className="text-right">Amount</span><span />
         </div>
         <ul className="divide-y divide-stone-100">
@@ -333,7 +345,7 @@ export default function InvoiceEditor({
             const err = errors[`line${l.key}`]
             return (
               <li key={l.key} className="px-3 py-3 md:py-2" data-error={!!err}>
-                <div className="grid grid-cols-4 items-start gap-2 md:grid-cols-[1.75rem_minmax(200px,1fr)_4.5rem_4.5rem_4rem_6.5rem_4.5rem_7rem_2.25rem] md:items-center">
+                <div className="grid grid-cols-4 items-start gap-2 md:grid-cols-[1.5rem_minmax(120px,1fr)_3.5rem_3.75rem_3.75rem_5.5rem_3.75rem_5.5rem_2rem] md:items-center md:gap-1.5 xl:grid-cols-[1.75rem_minmax(200px,1fr)_4.5rem_4.5rem_4rem_6.5rem_4.5rem_7rem_2.25rem] xl:gap-2">
                   <span className="hidden text-sm text-stone-400 md:block">{i + 1}</span>
                   <div className="col-span-3 md:col-span-1">
                     <Combobox
@@ -354,15 +366,15 @@ export default function InvoiceEditor({
                     />
                   </div>
                   <div className="flex justify-end md:contents">
-                    <button className="btn-ghost text-stone-400 hover:text-red-600 md:order-last" onClick={() => setD((x) => ({ ...x, lines: x.lines.length > 1 ? x.lines.filter((y) => y.key !== l.key) : [blankLine()] }))} aria-label="Remove line">
+                    <button className="btn-ghost p-2 text-stone-400 hover:text-red-600 max-md:min-h-10 max-md:min-w-10 md:order-last" onClick={() => setD((x) => ({ ...x, lines: x.lines.length > 1 ? x.lines.filter((y) => y.key !== l.key) : [blankLine()] }))} aria-label="Remove line">
                       <Trash2 size={16} />
                     </button>
                   </div>
                   <span className={`hidden text-right text-sm tabular-nums md:block ${short ? 'font-semibold text-red-600' : 'text-stone-500'}`}>{mode === 'sale' && l.productId ? avail : ''}</span>
-                  <MobileLabel label="Qty"><NumberInput aria-label="Qty" min={0} step={1} className="py-1.5" value={l.qty} onChange={(v) => setLine(l.key, { qty: Math.max(0, Math.round(v ?? 0)) }, true)} /></MobileLabel>
-                  <MobileLabel label="Free"><NumberInput aria-label="Free qty" min={0} step={1} className="py-1.5" value={l.freeQty} onChange={(v) => setLine(l.key, { freeQty: Math.max(0, Math.round(v ?? 0)), manualFree: true })} /></MobileLabel>
-                  <MobileLabel label="Price"><NumberInput aria-label="Unit price" min={0} step="0.01" className="py-1.5" value={l.unitPrice} onChange={(v) => setLine(l.key, { unitPrice: v ?? 0, manualPrice: true, priceNote: 'Typed price' })} /></MobileLabel>
-                  <MobileLabel label="Disc %"><NumberInput aria-label="Discount %" min={0} max={100} step="0.01" className="py-1.5" value={l.discPct} onChange={(v) => setLine(l.key, { discPct: v ?? 0, manualPrice: true, priceNote: 'Typed discount' })} /></MobileLabel>
+                  <MobileLabel label="Qty"><NumberInput aria-label="Qty" min={0} step={1} className="px-2 py-1.5 xl:px-3" value={l.qty} onChange={(v) => setLine(l.key, { qty: Math.max(0, Math.round(v ?? 0)) }, true)} /></MobileLabel>
+                  <MobileLabel label="Free"><NumberInput aria-label="Free qty" min={0} step={1} className="px-2 py-1.5 xl:px-3" value={l.freeQty} onChange={(v) => setLine(l.key, { freeQty: Math.max(0, Math.round(v ?? 0)), manualFree: true })} /></MobileLabel>
+                  <MobileLabel label="Price"><NumberInput aria-label="Unit price" min={0} step="0.01" className="px-2 py-1.5 xl:px-3" value={l.unitPrice} onChange={(v) => setLine(l.key, { unitPrice: Math.max(0, v ?? 0), manualPrice: true, priceNote: 'Typed price' })} /></MobileLabel>
+                  <MobileLabel label="Disc %"><NumberInput aria-label="Discount %" min={0} max={100} step="0.01" className="px-2 py-1.5 xl:px-3" value={l.discPct} onChange={(v) => setLine(l.key, { discPct: Math.min(100, Math.max(0, v ?? 0)), manualPrice: true, priceNote: 'Typed discount' })} /></MobileLabel>
                   <div className="col-span-4 flex items-center justify-between md:col-span-1 md:block md:text-right">
                     <span className="text-xs text-stone-500 md:hidden">Amount</span>
                     <span className="font-semibold tabular-nums">{rs(lineNet(l))}</span>
@@ -419,7 +431,7 @@ export default function InvoiceEditor({
 
       {/* phones & tablets: sticky totals bar */}
       <div className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)] lg:hidden">
-        <details className="group">
+        <details ref={detailsRef} className="group">
           <summary className="flex cursor-pointer list-none items-center justify-between py-1 text-sm">
             <span className="text-stone-500">{validLines.length} items · tap for totals</span>
             <span className="text-lg font-semibold tabular-nums">Rs {rs(t.netTotal)}</span>

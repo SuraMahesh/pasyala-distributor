@@ -30,6 +30,12 @@ export default function PrintPreview({
   const [paper, setPaper] = useState<Paper>(() => (localStorage.getItem('pp-paper') as Paper) || 'A4')
   const [landscape, setLandscape] = useState(false)
   const [zoom, setZoom] = useState(0.9)
+  // fit the sheet to the screen when opened (a phone is narrower than an A4 page)
+  useEffect(() => {
+    if (!open) return
+    const sheet = (landscape ? PAPER[paper].h : PAPER[paper].w) * MM
+    setZoom(Math.min(0.9, Math.max(0.3, Math.round(((window.innerWidth - 24) / sheet) * 100) / 100)))
+  }, [open, paper, landscape])
 
   useEffect(() => {
     try { localStorage.setItem('pp-paper', paper) } catch { /* ignore */ }

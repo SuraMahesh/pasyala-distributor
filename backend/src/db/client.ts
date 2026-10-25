@@ -23,7 +23,7 @@ export interface Database {
 }
 
 /** Finds backend/drizzle whether running from src (tsx) or dist (bundled). */
-export function migrationsDir() {
+function migrationsDir() {
   let dir = path.dirname(fileURLToPath(import.meta.url))
   for (let i = 0; i < 5; i++) {
     const candidate = path.join(dir, 'drizzle')

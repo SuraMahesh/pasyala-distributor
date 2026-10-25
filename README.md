@@ -46,7 +46,13 @@ To host the frontend separately (Netlify, Vercel …) set `VITE_API_URL` when bu
 **Backups:** `pg_dump -Fc pjd_erp > pjd_erp-$(date +%F).dump` daily (restore with `pg_restore`).
 Settings → *Download full Excel export* gives a readable copy too (one sheet per table).
 
-Set `APP_PASSWORD` to require a password (always do this on a public server).
+Set `APP_PASSWORD` to require a password (always do this on a public server; 8+ characters).
+
+**Security notes.** Login tokens are signed with a random secret the server creates on first start and keeps in the
+database (`AUTH_SECRET` overrides it); changing the password logs everyone out. Wrong passwords and wrong owner PINs are
+rate-limited per IP. Photo links carry a separate 7-day read-only token, and the request log never records it. The API
+refuses cross-origin calls unless `CORS_ORIGIN` lists the sites, and sends a Content Security Policy that allows scripts
+from the app itself only. Behind your own reverse proxy set `TRUST_PROXY=1`.
 
 ## Deploy to Vercel (free Hobby plan)
 
@@ -68,6 +74,22 @@ During every deploy the build applies database migrations and, on an empty datab
 
 Changing `APP_PASSWORD` later logs everyone out. Redeploy after changing environment variables.
 
+### AI features with a free OpenRouter key (instead of a paid Anthropic key)
+
+Invoice scanning and the Assistant use the Anthropic SDK. OpenRouter offers an Anthropic-compatible endpoint, so the
+same code can run on OpenRouter's **free** models — set, in `backend/.env` (or Vercel → Environment Variables):
+
+```bash
+ANTHROPIC_API_KEY=sk-or-v1-…                        # your OpenRouter key (openrouter.ai/settings/keys)
+ANTHROPIC_BASE_URL=https://openrouter.ai/api        # send requests to OpenRouter, not api.anthropic.com
+ASSISTANT_MODEL=nvidia/nemotron-3.5-super-vl:free   # any free model that supports tools
+ANTHROPIC_MODEL=nvidia/nemotron-3.5-super-vl:free   # for scanning: a free model with tools AND image input
+```
+
+Restart the server after changing these. Free models are slower and less accurate than Claude, and OpenRouter
+rate-limits them (about 20 requests a minute plus a daily cap; one assistant question makes several requests), so
+expect "rate-limiting" messages at busy times. Remove `ANTHROPIC_BASE_URL` to go back to Anthropic with an `sk-ant-…` key.
+
 ## Tests
 
 ```bash
@@ -75,11 +97,12 @@ npm test                                   # shared maths + full API suite (embe
 TEST_DATABASE_URL=postgres://… npm test -w backend   # same suite on a real PostgreSQL database (it is wiped!)
 ```
 
-38 tests cover: the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
+105 tests (89 API + 16 shared maths) cover: the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
 free issues, customer-type / customer / product pricing priority, promotions, invoice numbering, oversell
 protection (and no number used up on failure), edit/delete returning stock, FIFO payment allocation,
 overdue & aging, credit-limit and below-cost warnings, duplicate supplier invoices, adjustments, delete
-protection, pagination and report totals.
+protection, pagination and report totals, login/image tokens and rate limits, tamper-proof assistant history, invoice photos
+(real image type, duplicates, page numbering), the assistant's data tools, and the input-validation messages.
 
 ## How the numbers work
 
@@ -169,6 +192,28 @@ logged-in users.
   for products you already have. Tick what you want and Save — new products start with 0 stock.
 - Product matching is strict on purpose: an exact code always matches; a code that only looks similar must also
   have the right size and a matching name, so a new product is never mistaken for an existing one.
+
+## Assistant
+
+**Assistant** in the menu is a chat over the whole ERP, for the owner and staff, in English or Sinhala:
+
+- **Stock** — "How many 30ml Batu Thel do we have, and when did we last get it?", "What is running low?", "What should I reorder?",
+  "What is not selling?", "What is our stock worth?"
+- **Sales and purchases** — "Sales yesterday", "What did Asiri Pharmacy buy last month?", "Show invoice PJD-000012", "Show GRN HOSI005967",
+  "Top products this month", "Sales by customer type"
+- **Money** — "Who owes us money?", "Which customers are overdue?", "Aging report", "What do we owe the supplier?", "Payments received this week"
+- **Prices** — "Price of 750ml Pinda for a pharmacy", "Which promotions are running?"
+- **Decisions** — "How is business this month?", "Anything I should worry about today?" — the assistant fetches the figures, then suggests
+  (what to order, whom to call, what to stop stocking) and says which assumption it used (e.g. the sales rate of the last 30 days).
+
+Every number comes from the same functions as the screens (`productsWithStock`, `customerDues`, `services/reports.ts` …), so the assistant
+can never disagree with the Stock, Customers or Reports pages. The model never calculates stock or balances itself.
+
+Needs `ANTHROPIC_API_KEY` (same key as scanning; `ASSISTANT_MODEL` optional, default `claude-opus-5-5`). The assistant **cannot change the ERP**:
+asking it to fix a count creates a **pending request**; the owner approves or rejects it on the same page with `OWNER_PIN`, and only then is a
+stock adjustment posted (visible under Stock → Adjustments with the request number). For anything else it points to the right page.
+Code: `backend/src/services/assistant.ts` (tools + prompt), `assistant-data.ts` (reads), `assistant-approvals.ts` (owner approval),
+`routes/assistant.ts`, `frontend/src/pages/Assistant.tsx`. Tests: `backend/src/assistant.test.ts`.
 
 ## Printing
 
