@@ -1,0 +1,51 @@
+{
+  "_about": "Handwritten sales bills on the Pasyale bill book: 183801 (12 Oct 2026) and 183808 (15 Oct 2026) to Jayasri Osu, Gokarella; 183809 (15 Oct 2026) to Karadupola SD. Run: npm run db:import-sales -- src/db/imports/sales-2026-10.json [--apply] [--photos .data/import-photos/sales-2026-10]. Lines carry no discount; the bill discount is the % written at the bottom. 'written' = what the handwritten item name says.",
+  "payMethod": "Credit",
+  "customers": [
+    { "code": "JAYASRI-OSU", "name": "Jayasri Osu - Gokarella", "typeCode": "PHARMACY", "area": "Gokarella", "discPct": 35, "creditLimit": 0, "creditDays": null, "notes": "Bills on the Pasyale bill book at 35% off list" },
+    { "code": "KARADUPOLA-SD", "name": "Karadupola SD", "typeCode": "SHOP", "area": "Karadupola", "discPct": 30, "creditLimit": 0, "creditDays": null, "notes": "Bills on the Pasyale bill book at 30% off list" }
+  ],
+  "invoices": [
+    {
+      "billNo": "183801", "date": "2026-10-12", "customer": "JAYASRI-OSU", "billDiscPct": 35,
+      "written": { "gross": 470160, "netTotal": 305604 },
+      "photos": ["183801-p1.jpg"],
+      "lines": [
+        { "code": "NPAS0375", "size": "375ML", "name": "ASAMODAGAM SPRIT", "written": "Asamodagam", "qty": 240, "free": 60, "price": 220 },
+        { "code": "ATAB0030", "size": "30ML", "name": "ABA THEL", "written": "Aba thel", "qty": 180, "free": 15, "price": 200 },
+        { "code": "THBT0030", "size": "30ML", "name": "BATU THEL", "written": "batu thel", "qty": 120, "free": 10, "price": 200 },
+        { "code": "ATGL0030", "size": "30ML", "name": "GHEE OIL", "written": "Ghee oil", "qty": 180, "free": 15, "price": 280 },
+        { "code": "ATPS0030", "size": "30ML", "name": "PAS THEL", "written": "Pas", "qty": 240, "free": 20, "price": 200 },
+        { "code": "ATGN0030", "size": "30ML", "name": "THALA THEL", "written": "thala thel", "qty": 240, "free": 20, "price": 170 },
+        { "code": "THWV0030", "size": "30ML", "name": "WATHA VIDURANGA", "written": "watha viduranga", "qty": 120, "free": 10, "price": 200 },
+        { "code": "MSBH0030", "size": "30ML", "name": "BEE HONEY", "written": "bee honey", "qty": 120, "free": 10, "price": 290 },
+        { "code": "THKL0030", "size": "30ML", "name": "KOLASLESMA", "written": "kolaselesma", "qty": 24, "free": 2, "price": 220 },
+        { "code": "ATNE0030", "size": "30ML", "name": "KOHOMBA THEL", "written": "Kohomba", "qty": 240, "free": 20, "price": 200 },
+        { "code": "THMN0030", "size": "30ML", "name": "MAHA NARAYANA", "written": "narayana", "qty": 120, "free": 10, "price": 200 },
+        { "code": "THMS0030", "size": "30ML", "name": "MAHASIDDRTHA", "written": "Sidartha", "qty": 60, "free": 5, "price": 200 },
+        { "code": "THSP0030", "size": "30ML", "name": "SARSHAPADI", "written": "Sarshapadhi", "qty": 24, "free": 2, "price": 220 },
+        { "code": "THCM0030", "size": "30ML", "name": "CAMPHOR/KAPURU", "written": "kapuru", "qty": 24, "free": 2, "price": 250 },
+        { "code": "NPCS-P0100", "size": "100ML", "name": "PAWATTA WELMEE", "written": "Pavatha walmee", "qty": 120, "free": 10, "price": 400 },
+        { "code": "NPPP0030", "size": "30g", "name": "PASPANGUWA PACKET", "written": "Paspanguwa packet", "qty": 120, "free": 0, "price": 90 }
+      ]
+    },
+    {
+      "billNo": "183808", "date": "2026-10-15", "customer": "JAYASRI-OSU", "billDiscPct": 35,
+      "written": { "gross": 72000, "netTotal": 46800 },
+      "photos": ["183808-p1.jpg"],
+      "lines": [
+        { "code": "ATCS0030", "size": "30ML", "name": "CASTOR OIL", "written": "Castor Oil (Ederu)", "qty": 180, "free": 15, "price": 200 },
+        { "code": "ATME0030", "size": "30ML", "name": "MEE THEL", "written": "Mee Thel", "qty": 180, "free": 15, "price": 200 }
+      ]
+    },
+    {
+      "billNo": "183809", "date": "2026-10-15", "customer": "KARADUPOLA-SD", "billDiscPct": 30,
+      "written": { "gross": 32000, "netTotal": 22400 },
+      "photos": ["183809-p1.jpg"],
+      "lines": [
+        { "code": "THSU4500", "size": "4.5L", "name": "SOOLAHARA", "written": "Soolahara", "qty": 1, "free": 0, "price": 16000 },
+        { "code": "THMN4500", "size": "4.5L", "name": "MAHA NARAYANA", "written": "Maha narayana", "qty": 1, "free": 0, "price": 16000 }
+      ]
+    }
+  ]
+}

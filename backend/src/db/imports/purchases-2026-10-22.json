@@ -1,0 +1,75 @@
+{
+  "_about": "Pasyale Ayurveda Osu invoices HOSI006187, HOSI006206, HOSI006214, HOSI006215 and HOSI006216 of 2026-10-22, transcribed from photos. Run: npm run db:import-purchases -- src/db/imports/purchases-2026-10-22.json [--apply] [--photos .data/import-photos/2026-10-22]. A line's free qty is the 0.00 line printed under it.",
+  "supplierCode": "SUP001",
+  "salesPerson": "Sudaraka",
+  "payMethod": "Cash",
+  "billDiscPct": 8,
+  "lineDiscPct": 22,
+  "paidInFull": true,
+  "categoryByPrefix": {
+    "TH": "Thailaya (Oil)", "AT": "Thailaya (Oil)", "AR": "Arishta / Spirit", "CH": "Choorna / Powder",
+    "GG": "Guli / Tablets", "VT": "Guli / Tablets", "LP": "Lepa / Paste", "KL": "Lepa / Paste", "RS": "Rasayana",
+    "MS": "Honey", "UN": "Other", "NP": "Other", "SY": "Other", "QU": "Other"
+  },
+  "invoices": [
+    {
+      "invoiceNo": "HOSI006187", "orderNo": "HOSO004606", "date": "2026-10-22",
+      "printed": { "subTotal": 17550.00, "netTotal": 16146.00 },
+      "photos": ["HOSI006187-p1.jpg"],
+      "lines": [
+        { "code": "VTSR0100", "size": "100g", "name": "SEETHARAMA VATI", "qty": 15, "price": 1500 }
+      ]
+    },
+    {
+      "invoiceNo": "HOSI006206", "orderNo": "HOSO004643", "date": "2026-10-22",
+      "printed": { "subTotal": 69724.20, "netTotal": 64146.26 },
+      "photos": ["HOSI006206-p1.jpg"],
+      "lines": [
+        { "code": "RSKM0100", "size": "100g", "name": "KUSHMANDA RASAYANA", "qty": 40, "price": 450 },
+        { "code": "RSAS0100", "size": "100g", "name": "ASHWAGANDA RASAYANA", "qty": 40, "price": 450 },
+        { "code": "ARAS4500", "size": "4.5L", "name": "ASHOKARISHTAYA", "qty": 3, "price": 5000 },
+        { "code": "QUDB4500", "size": "4.5L", "name": "DANTHIMULA BALADI", "qty": 2, "price": 5500 },
+        { "code": "UNMS0100", "size": "100g", "name": "MANJANEI SHRUK (TOOTH POWDER)", "qty": 6, "price": 400 },
+        { "code": "QUAM0450", "size": "450ML", "name": "AMURTHAVUSHA PATOLA", "qty": 3, "price": 600 },
+        { "code": "LPDL0050", "size": "50g", "name": "DASHANGA LEPA", "qty": 20, "price": 500 },
+        { "code": "QUPM0450", "size": "450ML", "name": "PANCHIMOOLILAGU DHRK", "qty": 3, "price": 730 },
+        { "code": "QUTM4500", "size": "4.5L", "name": "THAMAKLAKYADI", "qty": 2, "price": 5500 }
+      ]
+    },
+    {
+      "invoiceNo": "HOSI006214", "orderNo": "HOSO004604", "date": "2026-10-22",
+      "printed": { "subTotal": 182676.00, "netTotal": 168061.92 },
+      "photos": ["HOSI006214-p1.jpg"],
+      "lines": [
+        { "code": "THSV0030", "size": "30ML", "name": "SARVAVISADI", "qty": 240, "free": 20, "price": 200 },
+        { "code": "THWP0030", "size": "30ML", "name": "WISHARPAHARA", "qty": 60, "free": 5, "price": 230 },
+        { "code": "THEN0375", "size": "375ML", "name": "NEELYADI", "qty": 3, "price": 1600 },
+        { "code": "THNR0375", "size": "375ML", "name": "NIRGUNDIYADI", "qty": 1, "price": 1700 },
+        { "code": "THSU0750", "size": "750ML", "name": "SOOLAHARA", "qty": 3, "price": 3300 },
+        { "code": "THMN4500", "size": "4.5L", "name": "MAHA NARAYANA", "qty": 3, "price": 16000 },
+        { "code": "THSV4500", "size": "4.5L", "name": "SARVAVISADI", "qty": 6, "price": 18000 }
+      ]
+    },
+    {
+      "invoiceNo": "HOSI006215", "orderNo": "HOSO004607", "date": "2026-10-22",
+      "printed": { "subTotal": 10085.40, "netTotal": 9278.57 },
+      "photos": ["HOSI006215-p1.jpg"],
+      "lines": [
+        { "code": "ATGL0030", "size": "30ML", "name": "GHEE OIL", "qty": 36, "price": 280 },
+        { "code": "ATCS0750", "size": "750ML", "name": "CASTOR OIL", "qty": 1, "price": 2850 }
+      ]
+    },
+    {
+      "invoiceNo": "HOSI006216", "orderNo": "HOSO004605", "date": "2026-10-22",
+      "printed": { "subTotal": 50115.00, "netTotal": 46105.80 },
+      "photos": ["HOSI006216-p1.jpg"],
+      "lines": [
+        { "code": "RSKM0100", "size": "100g", "name": "KUSHMANDA RASAYANA", "qty": 15, "price": 450 },
+        { "code": "KLRT0100", "size": "100g", "name": "RATHA KALKA", "qty": 4, "price": 900 },
+        { "code": "VTMM0050", "size": "50g", "name": "MADUMEGA VATI", "qty": 5, "price": 620 },
+        { "code": "VTMM0100", "size": "100g", "name": "MADUMEGA VATI", "qty": 7, "price": 1200 },
+        { "code": "VTMM1000", "size": "1kg", "name": "MADUMEGA VATI", "qty": 4, "price": 10600 }
+      ]
+    }
+  ]
+}

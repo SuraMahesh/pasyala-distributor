@@ -167,6 +167,30 @@ discount when it cannot read one. Parser tests use real OCR output from the 5 st
 
 Tips for good offline results: lay the page flat, fill the frame with the table, good light, no shadow across the lines.
 
+## Entering paper invoices in bulk
+
+For a batch of supplier invoices typed into a JSON file (`backend/src/db/imports/` has one file per delivery
+date), the importer checks every invoice against the totals printed on the paper, matches
+products by the supplier's code or by size + name, creates the ones the ERP does not have, and can attach the page
+photos:
+
+```bash
+cd backend
+npm run db:import-purchases -- src/db/imports/purchases-2026-10-21.json                 # preview only
+npm run db:import-purchases -- src/db/imports/purchases-2026-10-21.json --apply --photos .data/import-photos/2026-10-21
+```
+
+Nothing is written unless `--apply` is given and every invoice adds up. Running it again skips invoices already entered
+and only adds photos to invoices that still have none. When the photo store cannot be written from your computer (a
+Vercel Blob store set to OIDC only), add `--api https://your-site.vercel.app` with `APP_PASSWORD=…` in front of the
+command: the photos then go through the running site's own API.
+
+Handwritten **sales** bills work the same way with `npm run db:import-sales -- src/db/imports/sales-2026-10.json`
+(preview, then `--apply`, optionally `--photos <dir>`): customers in the file are matched by code or a similar name
+and created when new, products must already exist, every bill must reproduce its written gross and net totals, the
+stock that would leave is shown against what is on hand, and the ERP gives each sale its own PJD number (the paper
+bill number is kept in the invoice notes).
+
 ## Invoice photos
 
 Every sales and purchase invoice has an **Invoice photos** section (one or more pages). Photos are stored in a

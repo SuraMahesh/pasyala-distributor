@@ -23,6 +23,9 @@ interface PurchaseRow {
   orderNo: string
   date: string
   payMethod: string
+  subTotal: number
+  billDiscPct: number
+  billDiscount: number
   netTotal: number
   supplierId: number
   partyName: string
@@ -39,7 +42,7 @@ interface PurchaseRow {
 export function PurchaseList() {
   const [s, set] = useListState({ from: '', to: '', status: '', supplierId: '', images: '', sort: 'date', dir: 'desc' as const })
   const { data: suppliers = [] } = useSupplierOptions()
-  const q = usePaged<PurchaseRow, { count: number; netTotal: number; due: number }>('purchases', '/purchases', s)
+  const q = usePaged<PurchaseRow, { count: number; subTotal: number; billDiscount: number; netTotal: number; due: number }>('purchases', '/purchases', s)
   const columns: Column<PurchaseRow>[] = [
     { key: 'no', header: 'Invoice no', sortKey: 'invoiceNo', render: (r) => <Link to={`/purchases/${r.id}`} className="font-medium text-brand-700 hover:underline">{r.invoiceNo}</Link> },
     { key: 'photo', header: <Paperclip size={14} aria-label="Photos" />, align: 'center', mobile: false, render: (r) => (r.imageCount ? <span className="inline-flex items-center gap-0.5 text-xs text-brand-700" title={`${r.imageCount} photo(s) of the paper invoice`}><Paperclip size={13} />{r.imageCount > 1 ? r.imageCount : ''}</span> : <span className="text-xs text-stone-300" title="No photo yet">—</span>) },
@@ -48,6 +51,8 @@ export function PurchaseList() {
     { key: 'order', header: 'Order no', hideBelow: 'lg', render: (r) => <span className="text-stone-500">{r.orderNo}</span>, mobile: false },
     { key: 'items', header: 'Items', align: 'right', hideBelow: 'lg', render: (r) => r.lineCount },
     { key: 'units', header: 'Units (+free)', align: 'right', render: (r) => <>{r.units}{r.freeUnits ? <span className="text-brand-700"> +{r.freeUnits}</span> : ''}</> },
+    { key: 'sub', header: 'Sub total', align: 'right', hideBelow: 'lg', mobile: false, render: (r) => <span className="text-stone-500">{rs(r.subTotal)}</span> },
+    { key: 'disc', header: 'Bill discount', sortKey: 'billDiscount', align: 'right', render: (r) => (r.billDiscount ? <span className="text-brand-700" title={`${r.billDiscPct}% of the sub total`}>{rs(r.billDiscount)} <span className="text-xs text-stone-500">({r.billDiscPct}%)</span></span> : <span className="text-stone-300">—</span>) },
     { key: 'net', header: 'Net total', sortKey: 'netTotal', align: 'right', render: (r) => <span className="font-medium">{rs(r.netTotal)}</span> },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} overdue={r.overdue} /> },
   ]
@@ -62,9 +67,9 @@ export function PurchaseList() {
               const all = await fetchAll<PurchaseRow>('/purchases', { ...s, page: undefined, pageSize: undefined })
               await downloadExcel('purchases', [{
                 name: 'Purchases',
-                columns: [{ header: 'Invoice no' }, { header: 'Date' }, { header: 'Supplier' }, { header: 'Order no' }, { header: 'Lines', type: 'int' }, { header: 'Units', type: 'int' }, { header: 'Free units', type: 'int' }, { header: 'Net total', type: 'money' }, { header: 'Paid', type: 'money' }, { header: 'Due', type: 'money' }, { header: 'Status' }],
-                rows: all.map((r) => [r.invoiceNo, r.date, r.partyName, r.orderNo, r.lineCount, r.units, r.freeUnits, r.netTotal, r.paid, r.due, r.status === 'paid' ? 'Paid' : r.overdue ? 'Overdue' : 'Due']),
-                totals: [5, 6, 7, 8, 9],
+                columns: [{ header: 'Invoice no' }, { header: 'Date' }, { header: 'Supplier' }, { header: 'Order no' }, { header: 'Lines', type: 'int' }, { header: 'Units', type: 'int' }, { header: 'Free units', type: 'int' }, { header: 'Sub total', type: 'money' }, { header: 'Bill disc %' }, { header: 'Bill discount', type: 'money' }, { header: 'Net total', type: 'money' }, { header: 'Paid', type: 'money' }, { header: 'Due', type: 'money' }, { header: 'Status' }],
+                rows: all.map((r) => [r.invoiceNo, r.date, r.partyName, r.orderNo, r.lineCount, r.units, r.freeUnits, r.subTotal, r.billDiscPct, r.billDiscount, r.netTotal, r.paid, r.due, r.status === 'paid' ? 'Paid' : r.overdue ? 'Overdue' : 'Due']),
+                totals: [5, 6, 7, 9, 10, 11, 12],
               }])
             }}><FileSpreadsheet size={16} /> Excel</button>
             <Link to="/purchases/new" className="btn-secondary"><ScanLine size={16} /> Scan invoice image</Link>
@@ -72,9 +77,10 @@ export function PurchaseList() {
           </>
         }
       />
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Invoices" value={q.data?.summary.count ?? 0} />
-        <Stat label="Total" value={`Rs ${rs(q.data?.summary.netTotal)}`} />
+        <Stat label="Bill discount" value={`Rs ${rs(q.data?.summary.billDiscount)}`} hint={q.data?.summary.subTotal ? `of Rs ${rs(q.data.summary.subTotal)} sub total` : undefined} />
+        <Stat label="Net total" value={`Rs ${rs(q.data?.summary.netTotal)}`} />
         <Stat label="To pay" value={`Rs ${rs(q.data?.summary.due)}`} tone={q.data?.summary.due ? 'warn' : 'default'} />
       </div>
       <Filters>

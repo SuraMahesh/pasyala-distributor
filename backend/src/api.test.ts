@@ -56,7 +56,14 @@ describe('starting data from the 5 Pasyale invoices', () => {
       expect(detail.subTotal, p.invoiceNo).toBe(PRINTED_TOTALS[p.invoiceNo].sub)
       expect(detail.netTotal, p.invoiceNo).toBe(PRINTED_TOTALS[p.invoiceNo].net)
       expect(detail.status).toBe('paid')
+      // the list shows the 8% bill discount of every invoice
+      expect(p.billDiscPct, p.invoiceNo).toBe(8)
+      expect(p.subTotal, p.invoiceNo).toBe(detail.subTotal)
+      expect(p.billDiscount, p.invoiceNo).toBe(detail.billDiscount)
+      expect(p.subTotal - p.billDiscount, p.invoiceNo).toBeCloseTo(p.netTotal, 2)
     }
+    expect(list.summary.billDiscount).toBeCloseTo(list.items.reduce((s: number, p: { billDiscount: number }) => s + p.billDiscount, 0), 2)
+    expect(list.summary.subTotal - list.summary.billDiscount).toBeCloseTo(list.summary.netTotal, 2)
   })
 
   it('stock includes free issues and landed cost spreads discounts', async () => {

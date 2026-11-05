@@ -11,7 +11,9 @@
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate-cli.ts",
     "db:seed": "tsx --env-file-if-exists=.env src/db/seed-cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:import-purchases": "tsx --env-file-if-exists=.env src/db/import-purchases-cli.ts",
+    "db:import-sales": "tsx --env-file-if-exists=.env src/db/import-sales-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

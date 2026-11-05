@@ -111,7 +111,7 @@ const productFilters = listQuerySchema.extend({
  * when typed — refused if another product already has it — else category + name + size (THMN0030 style), with
  * -2, -3 … when two different products would get the same generated code.
  */
-async function createProduct(tx: Executor, input: ProductInput) {
+export async function createProduct(tx: Executor, input: ProductInput) {
   const [dup] = await tx.select({ code: products.code }).from(products).where(and(eq(products.name, input.name), eq(products.size, input.size)))
   if (dup) throw conflict(`${input.size} ${input.name} already exists (${dup.code}) — edit that product or add a different size`)
   if (input.code) {

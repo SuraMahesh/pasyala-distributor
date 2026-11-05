@@ -110,6 +110,7 @@ export function transactionRoutes(db: DB) {
         .select({
           id: purchaseInvoices.id, invoiceNo: purchaseInvoices.invoiceNo, orderNo: purchaseInvoices.orderNo, date: purchaseInvoices.date,
           payMethod: purchaseInvoices.payMethod, netTotal: purchaseInvoices.netTotal, paidOnInvoice: purchaseInvoices.paidOnInvoice,
+          subTotal: purchaseInvoices.subTotal, billDiscPct: purchaseInvoices.billDiscPct, billDiscount: purchaseInvoices.billDiscount,
           supplierId: purchaseInvoices.supplierId, partyName: suppliers.name,
           lineCount: sql<number>`(select count(*)::int from purchase_lines pl where pl.invoice_id = ${purchaseInvoices.id})`,
           units: sql<number>`(select coalesce(sum(qty), 0)::int from purchase_lines pl where pl.invoice_id = ${purchaseInvoices.id})`,
@@ -128,10 +129,19 @@ export function transactionRoutes(db: DB) {
     items = byImages(items, q.images)
     const { filtered, ...page } = paginate(items, q, {
       search: (i) => `${i.invoiceNo} ${i.orderNo} ${i.partyName}`,
-      sorters: invoiceSorters,
+      sorters: { ...invoiceSorters, billDiscount: (i: { billDiscount: number }) => i.billDiscount },
       defaultSort: { key: 'date', dir: 'desc' },
     })
-    res.json({ ...page, summary: { count: filtered.length, netTotal: round2(filtered.reduce((s, i) => s + i.netTotal, 0)), due: round2(filtered.reduce((s, i) => s + i.due, 0)) } })
+    res.json({
+      ...page,
+      summary: {
+        count: filtered.length,
+        subTotal: round2(filtered.reduce((s, i) => s + i.subTotal, 0)),
+        billDiscount: round2(filtered.reduce((s, i) => s + i.billDiscount, 0)),
+        netTotal: round2(filtered.reduce((s, i) => s + i.netTotal, 0)),
+        due: round2(filtered.reduce((s, i) => s + i.due, 0)),
+      },
+    })
   })
   r.get('/purchases/:id', async (req, res) => res.json(await getPurchase(db, idParam(req.params.id))))
   r.post('/purchases', async (req, res) => res.status(201).json(await savePurchase(db, parse(purchaseInvoiceSchema, req.body))))
