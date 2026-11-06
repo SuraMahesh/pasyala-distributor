@@ -61,7 +61,7 @@ export async function productsWithStock(ex: Executor): Promise<ProductWithStock[
     if (paidLeft > 0) {
       // more on hand than all GRNs (stock added by adjustment) — value it like the newest refill
       const ref = layers.find((l) => l.unitPrice > 0) ?? layers[0] ?? opening // skip a free-only refill: Rs 0 is not a cost
-      const extra = batchValue({ ...ref, invoiceId: null, invoiceNo: 'Stock adjustment', date: '' }, paidLeft, 0)
+      const extra = batchValue({ ...ref, invoiceId: null, invoiceNo: 'Stock adjustment / return', date: '' }, paidLeft, 0)
       batches.push(extra)
     }
     const grossValue = round2(batches.reduce((a, b) => a + b.amount, 0))

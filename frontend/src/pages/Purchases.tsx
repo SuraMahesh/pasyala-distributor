@@ -7,7 +7,7 @@ import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
 import InvoiceDocument from '../components/InvoiceDocument'
 import InvoiceImages from '../components/InvoiceImages'
-import InvoiceEditor, { blankLine, emptyDraft, type Draft } from '../components/InvoiceEditor'
+import InvoiceEditor, { blankLine, emptyDraft, payMethodLabel, type Draft } from '../components/InvoiceEditor'
 import { attachScanPhoto, ScanReview, ScanUpload, scanToDraft, type ScanState } from '../components/InvoiceScan'
 import PrintPreview from '../components/PrintPreview'
 import { ErrorBox, Filters, PageHeader, SearchBox, Spinner, Stat, StatusBadge } from '../components/ui'
@@ -135,11 +135,14 @@ function toDraft(inv: PurchaseInvoice): Draft {
     payMethod: inv.payMethod,
     billDiscPct: inv.billDiscPct,
     paidOnInvoice: inv.paidOnInvoice,
-    paidTouched: Math.abs(inv.paidOnInvoice - inv.netTotal) > 0.004,
+    paidTouched: Math.abs(inv.paidOnInvoice - inv.netTotal) > 0.004 && !(inv.payMethod === 'Cheque' && inv.paidOnInvoice === 0),
     notes: inv.notes,
     invoiceNo: inv.invoiceNo,
     orderNo: inv.orderNo,
     salesPerson: inv.salesPerson,
+    chequeNo: inv.chequeNo,
+    chequeDate: inv.chequeDate ?? '',
+    chequePaid: inv.payMethod === 'Cheque' && inv.paidOnInvoice + 0.004 >= inv.netTotal,
     lines: inv.lines.map((l) => ({ ...blankLine(), productId: l.productId, qty: l.qty, freeQty: l.freeQty, unitPrice: l.unitPrice, discPct: l.discPct, manualPrice: true, manualFree: true })),
   }
 }
@@ -159,7 +162,7 @@ function PurchaseDoc({ inv, d, paid }: { inv?: PurchaseInvoice; d?: Draft; paid:
       issuer={{ name: inv?.supplierName ?? sup?.name ?? 'Supplier' }}
       party={{ code: settings?.supplierCustomerCode, name: settings?.name, address: settings?.address, phone: settings?.phone }}
       partyLabel="Customer"
-      meta={[['Invoice No', src.invoiceNo], ['Invoice Date', src.date], ['Order No', src.orderNo], ['Sales Person', src.salesPerson], ['Pay. Method', src.payMethod]]}
+      meta={[['Invoice No', src.invoiceNo], ['Invoice Date', src.date], ['Order No', src.orderNo], ['Sales Person', src.salesPerson], ['Pay. Method', payMethodLabel(src.payMethod, src.chequeNo, src.chequeDate)]]}
       lines={lines}
       billDiscPct={src.billDiscPct}
       paidAmount={paid}
@@ -219,7 +222,7 @@ export function PurchaseEdit() {
           save.mutateAsync({
             body: {
               supplierId: d.partyId, invoiceNo: d.invoiceNo, orderNo: d.orderNo, salesPerson: d.salesPerson, date: d.date, payMethod: d.payMethod,
-              billDiscPct: d.billDiscPct, paidOnInvoice: paid, notes: d.notes,
+              billDiscPct: d.billDiscPct, paidOnInvoice: paid, notes: d.notes, chequeNo: d.chequeNo, chequeDate: d.payMethod === 'Cheque' && d.chequeDate ? d.chequeDate : null,
               lines: d.lines.map(({ productId, qty, freeQty, unitPrice, discPct }) => ({ productId, qty, freeQty, unitPrice, discPct })),
             },
           })
@@ -238,6 +241,11 @@ export function PurchaseView() {
   const [preview, setPreview] = useState(false)
   const [paying, setPaying] = useState(false)
   const del = useApiMutation(() => api.del(`/purchases/${id}`), { success: 'Purchase deleted — stock reduced', onSuccess: () => nav('/purchases', { replace: true }) })
+  const cleared = useApiMutation(() => api.post(`/purchases/${id}/cheque-cleared`, {}), { success: 'Cheque cleared — invoice marked paid' })
+  const markCleared = async () => {
+    const inv = q.data!
+    if (await confirm({ title: 'Cheque cleared?', message: `${inv.invoiceNo} will be marked paid in full (Rs ${rs(inv.netTotal)}) by cheque${inv.chequeNo ? ` ${inv.chequeNo}` : ''}.`, confirmText: 'Mark paid' })) cleared.mutate(undefined)
+  }
   const usage = useQuery({ queryKey: ['purchases', id, 'usage'], queryFn: () => api.get<PurchaseUsage>(`/purchases/${id}/usage`) })
   const askDelete = async () => {
     if (!inv) return
@@ -275,7 +283,8 @@ export function PurchaseView() {
               <Trash2 size={15} /> Delete
             </button>
             <Link to={`/purchases/${inv.id}/edit`} className="btn-secondary"><Pencil size={15} /> Edit</Link>
-            {inv.due > 0 && <button className="btn-secondary" onClick={() => setPaying(true)}><Wallet size={15} /> Pay</button>}
+            {inv.due > 0 && inv.payMethod === 'Cheque' && <button className="btn-secondary" onClick={markCleared} disabled={cleared.isPending}><Wallet size={15} /> Cheque cleared</button>}
+            {inv.due > 0 && inv.payMethod !== 'Cheque' && <button className="btn-secondary" onClick={() => setPaying(true)}><Wallet size={15} /> Pay</button>}
             <button className="btn-secondary hidden sm:inline-flex" onClick={() => quickPrint(`${inv.invoiceNo}`)}><Printer size={15} /> Quick print</button>
             <button className="btn-primary" onClick={() => setPreview(true)}><Eye size={15} /> Print preview</button>
           </>
@@ -289,6 +298,12 @@ export function PurchaseView() {
             <UsageList usage={usage.data} />
           </div>
         </div>
+      )}
+      {inv.payMethod === 'Cheque' && inv.due > 0 && (
+        <p className="no-print mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <Wallet size={16} /> Our cheque{inv.chequeNo ? ` ${inv.chequeNo}` : ''}{inv.chequeDate ? ` dated ${inv.chequeDate}` : ''} has not cleared yet — this GRN falls due on {inv.chequeDate ?? inv.dueDate}.
+          <button className="font-medium underline" onClick={markCleared}>Mark the cheque cleared</button>
+        </p>
       )}
       <div className="no-print mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         <Stat label="Net total" value={`Rs ${rs(inv.netTotal)}`} />

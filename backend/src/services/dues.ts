@@ -10,11 +10,20 @@ interface InvRow {
   net_total: number
   paid_on_invoice: number
   credit_days: number
+  /** a cheque that is not paid yet: the invoice falls due on the cheque date */
+  cheque_date: string | null
 }
 
-const EMPTY: PartyBalance = { billed: 0, paid: 0, balance: 0, invoices: 0, overdue: 0, oldestDueDate: null }
+const EMPTY: PartyBalance = { billed: 0, paid: 0, returned: 0, balance: 0, invoices: 0, overdue: 0, oldestDueDate: null }
 
-function compute(invoices: InvRow[], payments: { party_id: number; total: number }[], partyIds: number[], today: string) {
+/** Sales-return credits (net total − cash refunded): per invoice when the return names one, else per customer. */
+interface Credits {
+  byInvoice: Map<number, number>
+  byParty: Map<number, number>
+}
+const NO_CREDITS: Credits = { byInvoice: new Map(), byParty: new Map() }
+
+function compute(invoices: InvRow[], payments: { party_id: number; total: number }[], partyIds: number[], today: string, credits = NO_CREDITS) {
   const byParty = new Map<number, InvRow[]>()
   for (const id of partyIds) byParty.set(id, [])
   for (const inv of invoices) {
@@ -26,9 +35,10 @@ function compute(invoices: InvRow[], payments: { party_id: number; total: number
   const summary = new Map<number, PartyBalance>()
   for (const [partyId, list] of byParty) {
     const r = allocateDues(
-      list.map((i) => ({ id: i.id, date: i.date, netTotal: Number(i.net_total), paidOnInvoice: Number(i.paid_on_invoice), creditDays: i.credit_days })),
+      list.map((i) => ({ id: i.id, date: i.date, netTotal: Number(i.net_total), paidOnInvoice: Number(i.paid_on_invoice), creditDays: i.credit_days, credited: credits.byInvoice.get(i.id) ?? 0, dueDate: i.cheque_date ?? undefined })),
       payMap.get(partyId) ?? 0,
       today,
+      credits.byParty.get(partyId) ?? 0,
     )
     r.byInvoice.forEach((v, k) => byInvoice.set(k, v))
     summary.set(partyId, r.summary)
@@ -44,7 +54,7 @@ function compute(invoices: InvRow[], payments: { party_id: number; total: number
 export async function customerDues(ex: Executor, today = todayLK()) {
   const invoices = await rows<InvRow>(
       ex,
-      sql`select si.id, si.customer_id as party_id, si.date, si.net_total, si.paid_on_invoice,
+      sql`select si.id, si.customer_id as party_id, si.date, si.net_total, si.paid_on_invoice, si.cheque_date,
                  coalesce(c.credit_days, ct.credit_days, 0) as credit_days
           from sales_invoices si join customers c on c.id = si.customer_id join customer_types ct on ct.id = c.type_id`,
   )
@@ -53,14 +63,24 @@ export async function customerDues(ex: Executor, today = todayLK()) {
     sql`select customer_id as party_id, sum(amount) as total from payments where party_type = 'customer' group by customer_id`,
   )
   const parties = await rows<{ id: number }>(ex, sql`select id from customers`)
-  return compute(invoices, payments, parties.map((p) => p.id), today)
+  // sales returns: what came off the customer's balance — against the invoice named on the return, else the customer in general
+  const returns = await rows<{ party_id: number; invoice_id: number | null; total: number }>(
+    ex,
+    sql`select customer_id as party_id, sales_invoice_id as invoice_id, sum(net_total - refunded) as total from sales_returns group by customer_id, sales_invoice_id`,
+  )
+  const credits: Credits = { byInvoice: new Map(), byParty: new Map() }
+  for (const r of returns) {
+    if (r.invoice_id != null) credits.byInvoice.set(r.invoice_id, (credits.byInvoice.get(r.invoice_id) ?? 0) + Number(r.total))
+    else credits.byParty.set(r.party_id, (credits.byParty.get(r.party_id) ?? 0) + Number(r.total))
+  }
+  return compute(invoices, payments, parties.map((p) => p.id), today, credits)
 }
 
 /** Unpaid amounts for every purchase invoice + balance owed to every supplier. */
 export async function supplierDues(ex: Executor, today = todayLK()) {
   const invoices = await rows<InvRow>(
       ex,
-      sql`select pi.id, pi.supplier_id as party_id, pi.date, pi.net_total, pi.paid_on_invoice, s.credit_days
+      sql`select pi.id, pi.supplier_id as party_id, pi.date, pi.net_total, pi.paid_on_invoice, pi.cheque_date, s.credit_days
           from purchase_invoices pi join suppliers s on s.id = pi.supplier_id`,
   )
   const payments = await rows<{ party_id: number; total: number }>(

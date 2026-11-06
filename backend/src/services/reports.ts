@@ -31,6 +31,15 @@ export interface AgingRow {
 }
 export interface ReportSummary {
   invoices: number
+  /** sales returns in the period */
+  returns: number
+  /** invoice totals before returns */
+  grossRevenue: number
+  /** value of goods customers sent back */
+  returned: number
+  /** cash handed back on returns (already taken off `collected`) */
+  refunded: number
+  /** sales net of returns */
   revenue: number
   cost: number
   profit: number
@@ -50,14 +59,74 @@ export interface ReportSummary {
 
 const withProfit = <T extends { revenue: number; cost: number }>(x: T) => ({ ...x, revenue: round2(x.revenue), cost: round2(x.cost), profit: round2(x.revenue - x.cost) })
 
-/** Sales, cost, profit, purchases and money in/out for a date range, plus today's balances and stock value. */
+/**
+ * Every sales line (+) and sales-return line (−) in a date range, with the money it brought in after the bill
+ * discount and the cost of the goods. Summing these gives sales net of returns — the figure used everywhere.
+ */
+const lineMoves = (from: string, to: string) => sql`(
+  select sl.product_id, si.customer_id, si.id as invoice_id, si.date, sl.qty, sl.free_qty,
+         sl.line_net * (1 - si.bill_disc_pct / 100) as revenue, sl.unit_cost * (sl.qty + sl.free_qty) as cost
+    from sales_lines sl join sales_invoices si on si.id = sl.invoice_id where si.date between ${from} and ${to}
+  union all
+  select rl.product_id, r.customer_id, null, r.date, -rl.qty, -rl.free_qty,
+         -(rl.line_net * (1 - r.bill_disc_pct / 100)), -(rl.unit_cost * (rl.qty + rl.free_qty))
+    from sales_return_lines rl join sales_returns r on r.id = rl.return_id where r.date between ${from} and ${to}
+)`
+
+/** Every sales invoice (+) and sales return (−) in a date range. `collected` = cash on the invoice / cash refunded. */
+const docMoves = (from: string, to: string) => sql`(
+  select customer_id, id as invoice_id, date, net_total as revenue, cost_total as cost, paid_on_invoice as collected
+    from sales_invoices where date between ${from} and ${to}
+  union all
+  select customer_id, null, date, -net_total, -cost_total, -refunded
+    from sales_returns where date between ${from} and ${to}
+)`
+
+export interface NetSales {
+  invoices: number
+  returns: number
+  /** invoice totals before returns */
+  grossRevenue: number
+  /** value of the goods that came back */
+  returned: number
+  /** grossRevenue − returned */
+  revenue: number
+  cost: number
+  /** cash handed back on returns */
+  refunded: number
+  units: number
+  free: number
+}
+
+/** Sales less returns for a date range — the "Sales" figure on the dashboard, the reports and in the assistant. */
+export async function netSales(ex: Executor, from: string, to: string): Promise<NetSales> {
+  const [[d], [u]] = await Promise.all([
+    rows<{ invoices: number; returns: number; gross: number; returned: number; revenue: number; cost: number; refunded: number }>(ex, sql`
+      select count(invoice_id)::int as invoices, (count(*) - count(invoice_id))::int as returns,
+             coalesce(sum(case when invoice_id is not null then revenue end), 0) as gross,
+             coalesce(sum(case when invoice_id is null then -revenue end), 0) as returned,
+             coalesce(sum(revenue), 0) as revenue, coalesce(sum(cost), 0) as cost,
+             coalesce(sum(case when invoice_id is null then -collected end), 0) as refunded
+      from ${docMoves(from, to)} m`),
+    rows<{ units: number; free: number }>(ex, sql`select coalesce(sum(qty), 0)::int as units, coalesce(sum(free_qty), 0)::int as free from ${lineMoves(from, to)} m`),
+  ])
+  return {
+    invoices: d.invoices,
+    returns: d.returns,
+    grossRevenue: round2(d.gross),
+    returned: round2(d.returned),
+    revenue: round2(d.revenue),
+    cost: round2(d.cost),
+    refunded: round2(d.refunded),
+    units: u.units,
+    free: u.free,
+  }
+}
+
+/** Sales (net of returns), cost, profit, purchases and money in/out for a date range, plus today's balances and stock value. */
 export async function reportSummary(ex: Executor, from: string, to: string): Promise<ReportSummary> {
-  const [[sales], [purch], [collected], [paidOut], customers, suppliers, products] = await Promise.all([
-    rows<{ n: number; revenue: number; cost: number; units: number; free: number }>(ex, sql`
-      select count(*)::int as n, coalesce(sum(net_total), 0) as revenue, coalesce(sum(cost_total), 0) as cost,
-             coalesce((select sum(qty) from sales_lines sl join sales_invoices s2 on s2.id = sl.invoice_id where s2.date between ${from} and ${to}), 0)::int as units,
-             coalesce((select sum(free_qty) from sales_lines sl join sales_invoices s2 on s2.id = sl.invoice_id where s2.date between ${from} and ${to}), 0)::int as free
-      from sales_invoices where date between ${from} and ${to}`),
+  const [sales, [purch], [collected], [paidOut], customers, suppliers, products] = await Promise.all([
+    netSales(ex, from, to),
     rows<{ n: number; total: number }>(ex, sql`select count(*)::int as n, coalesce(sum(net_total), 0) as total from purchase_invoices where date between ${from} and ${to}`),
     rows<{ total: number }>(ex, sql`select
       coalesce((select sum(paid_on_invoice) from sales_invoices where date between ${from} and ${to}), 0) +
@@ -71,16 +140,20 @@ export async function reportSummary(ex: Executor, from: string, to: string): Pro
   ])
   const profit = round2(sales.revenue - sales.cost)
   return {
-    invoices: sales.n,
-    revenue: round2(sales.revenue),
-    cost: round2(sales.cost),
+    invoices: sales.invoices,
+    returns: sales.returns,
+    grossRevenue: sales.grossRevenue,
+    returned: sales.returned,
+    refunded: sales.refunded,
+    revenue: sales.revenue,
+    cost: sales.cost,
     profit,
     margin: sales.revenue ? round2((profit / sales.revenue) * 100) : 0,
     unitsSold: sales.units,
     freeUnits: sales.free,
     purchases: round2(purch.total),
     purchaseCount: purch.n,
-    collected: round2(collected.total),
+    collected: round2(collected.total - sales.refunded),
     paidOut: round2(paidOut.total),
     receivable: round2(customers.reduce((s, c) => s + Math.max(c.balance, 0), 0)),
     overdue: round2(customers.reduce((s, c) => s + c.overdue, 0)),
@@ -92,43 +165,39 @@ export async function reportSummary(ex: Executor, from: string, to: string): Pro
 export async function salesByProduct(ex: Executor, from: string, to: string): Promise<ByProductRow[]> {
   const list = await rows<{ productId: number; code: string; label: string; qty: number; free: number; revenue: number; cost: number; invoices: number }>(ex, sql`
     select p.id as "productId", p.code, p.size || ' ' || p.name as label,
-           sum(sl.qty)::int as qty, sum(sl.free_qty)::int as free,
-           sum(sl.line_net * (1 - si.bill_disc_pct / 100)) as revenue,
-           sum(sl.unit_cost * (sl.qty + sl.free_qty)) as cost,
-           count(distinct si.id)::int as invoices
-    from sales_lines sl join sales_invoices si on si.id = sl.invoice_id join products p on p.id = sl.product_id
-    where si.date between ${from} and ${to}
+           sum(m.qty)::int as qty, sum(m.free_qty)::int as free, sum(m.revenue) as revenue, sum(m.cost) as cost,
+           count(distinct m.invoice_id)::int as invoices
+    from ${lineMoves(from, to)} m join products p on p.id = m.product_id
     group by p.id order by revenue desc`)
   return list.map(withProfit)
 }
 
 export async function salesByCustomer(ex: Executor, from: string, to: string): Promise<ByCustomerRow[]> {
   const list = await rows<{ customerId: number; name: string; typeName: string; area: string; invoices: number; revenue: number; cost: number }>(ex, sql`
-    select c.id as "customerId", c.name, ct.name as "typeName", c.area, count(*)::int as invoices,
-           sum(si.net_total) as revenue, sum(si.cost_total) as cost
-    from sales_invoices si join customers c on c.id = si.customer_id join customer_types ct on ct.id = c.type_id
-    where si.date between ${from} and ${to}
+    select c.id as "customerId", c.name, ct.name as "typeName", c.area, count(m.invoice_id)::int as invoices,
+           sum(m.revenue) as revenue, sum(m.cost) as cost
+    from ${docMoves(from, to)} m join customers c on c.id = m.customer_id join customer_types ct on ct.id = c.type_id
     group by c.id, ct.name order by revenue desc`)
   return list.map(withProfit)
 }
 
 export async function salesByType(ex: Executor, from: string, to: string): Promise<ByTypeRow[]> {
   const list = await rows<{ typeId: number; name: string; customers: number; invoices: number; revenue: number; cost: number }>(ex, sql`
-    select ct.id as "typeId", ct.name, count(distinct c.id)::int as customers, count(si.id)::int as invoices,
-           coalesce(sum(si.net_total), 0) as revenue, coalesce(sum(si.cost_total), 0) as cost
+    select ct.id as "typeId", ct.name, count(distinct c.id)::int as customers, count(m.invoice_id)::int as invoices,
+           coalesce(sum(m.revenue), 0) as revenue, coalesce(sum(m.cost), 0) as cost
     from customer_types ct
     left join customers c on c.type_id = ct.id
-    left join sales_invoices si on si.customer_id = c.id and si.date between ${from} and ${to}
+    left join ${docMoves(from, to)} m on m.customer_id = c.id
     group by ct.id order by revenue desc`)
   return list.map(withProfit)
 }
 
 export async function salesDaily(ex: Executor, from: string, to: string): Promise<DailyRow[]> {
   const list = await rows<{ date: string; invoices: number; revenue: number; cost: number; collected: number }>(ex, sql`
-    select si.date::text as date, count(*)::int as invoices, sum(si.net_total) as revenue, sum(si.cost_total) as cost,
-           sum(si.paid_on_invoice) as collected
-    from sales_invoices si where si.date between ${from} and ${to}
-    group by si.date order by si.date`)
+    select m.date::text as date, count(m.invoice_id)::int as invoices, sum(m.revenue) as revenue, sum(m.cost) as cost,
+           sum(m.collected) as collected
+    from ${docMoves(from, to)} m
+    group by m.date order by m.date`)
   return list.map(withProfit)
 }
 

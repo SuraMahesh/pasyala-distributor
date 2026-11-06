@@ -14,11 +14,11 @@ export interface ProductRow {
   id: number; code: string; name: string; size: string; category: string; active: boolean
   onHand: number; paidOnHand: number; freeOnHand: number; reorderLevel: number
   listPrice: number; sellPrice: number; avgCost: number; stockValue: number; margin: number
-  opening: number; purchased: number; sold: number; adjusted: number
+  opening: number; purchased: number; sold: number; returned: number; adjusted: number
   batches: { invoiceNo: string; date: string; qty: number; freeQty: number; unitPrice: number }[]
 }
 export interface MovementRow {
-  date: string; type: 'Opening' | 'Purchase' | 'Sale' | 'Adjustment'; ref: string; party: string
+  date: string; type: 'Opening' | 'Purchase' | 'Sale' | 'Return' | 'Adjustment'; ref: string; party: string
   qtyIn: number; qtyOut: number; balance: number
 }
 export interface PurchaseLineRow {
@@ -127,7 +127,7 @@ export function makeTools(data: AssistantData) {
     run: async ({ productId }) => {
       const p = await data.getProduct(productId)
       if (!p) return j({ error: `No product with id ${productId}` })
-      return j({ id: p.id, code: p.code, label: label(p), category: p.category, active: p.active, onHand: p.onHand, chargedOnHand: p.paidOnHand, freeOnHand: p.freeOnHand, opening: p.opening, purchased: p.purchased, sold: p.sold, adjusted: p.adjusted, reorderLevel: p.reorderLevel, avgCost: p.avgCost, sellPrice: p.sellPrice, marginPct: p.margin, stockValue: p.stockValue, batchesLeft: p.batches, formula: 'onHand = opening + purchased(incl. free) - sold(incl. free) + adjusted' })
+      return j({ id: p.id, code: p.code, label: label(p), category: p.category, active: p.active, onHand: p.onHand, chargedOnHand: p.paidOnHand, freeOnHand: p.freeOnHand, opening: p.opening, purchased: p.purchased, sold: p.sold, returned: p.returned, adjusted: p.adjusted, reorderLevel: p.reorderLevel, avgCost: p.avgCost, sellPrice: p.sellPrice, marginPct: p.margin, stockValue: p.stockValue, batchesLeft: p.batches, formula: 'onHand = opening + purchased(incl. free) - sold(incl. free) + returned by customers (restocked) + adjusted' })
     },
   })
 
@@ -135,10 +135,10 @@ export function makeTools(data: AssistantData) {
     name: 'get_movements',
     description:
       'Stock movement history of one product, newest first, with the running balance after each movement: ' +
-      'Opening, Purchase (GRN), Sale, Adjustment. Use for "what happened to this stock" and "last invoices".',
+      'Opening, Purchase (GRN), Sale, Return (goods a customer sent back, restocked), Adjustment. Use for "what happened to this stock" and "last invoices".',
     inputSchema: z.object({
       productId: z.number().int(),
-      type: z.enum(['Purchase', 'Sale', 'Adjustment']).optional().describe('Only this kind of movement'),
+      type: z.enum(['Purchase', 'Sale', 'Return', 'Adjustment']).optional().describe('Only this kind of movement'),
       limit: z.number().int().min(1).max(100).default(20),
     }),
     run: async ({ productId, type, limit }) => {
@@ -437,7 +437,7 @@ export function makeTools(data: AssistantData) {
   const businessSummary = betaZodTool({
     name: 'business_summary',
     description:
-      'The numbers for a date range: sales invoices, revenue, cost, profit, margin %, units sold, purchases, money collected and paid out — ' +
+      'The numbers for a date range: sales invoices, revenue (net of sales returns; grossRevenue and returned are also given), cost, profit, margin %, units sold, purchases, money collected and paid out — ' +
       'plus TODAY\'S receivable, overdue, payable and stock value (these are balances as of now, not for the period). ' +
       'Use for "how is business / how did we do this month / today\'s summary". Always state the date range you used.',
     inputSchema: z.object({ from: isoDate, to: isoDate }),

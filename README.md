@@ -99,7 +99,7 @@ npm test                                   # shared maths + full API suite (embe
 TEST_DATABASE_URL=postgres://… npm test -w backend   # same suite on a real PostgreSQL database (it is wiped!)
 ```
 
-105 tests (89 API + 16 shared maths) cover: the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
+130 tests (111 backend + 19 shared maths) cover: cheques not yet paid (cheque date as due date, cheque cleared), sales returns (stock back or written off, credit against the invoice, refunds, delete guards, reports net of returns), the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
 free issues, customer-type / customer / product pricing priority, promotions, invoice numbering, oversell
 protection (and no number used up on failure), edit/delete returning stock, FIFO payment allocation,
 overdue & aging, credit-limit and below-cost warnings, duplicate supplier invoices, adjustments, delete
@@ -113,10 +113,12 @@ protection, pagination and report totals, login/image tokens and rate limits, ta
 | Line amount | qty × unit price × (1 − disc %), rounded to cents |
 | Net total | sub total − bill discount % |
 | Landed cost / unit | Σ line net × (1 − bill disc %) ÷ Σ (qty + free) — free issues lower your cost |
-| Stock on hand | opening + purchased (incl. free) − sold (incl. free) ± adjustments |
+| Stock on hand | opening + purchased (incl. free) − sold (incl. free) + returned by customers (restocked) ± adjustments |
+| Sales return | priced as sold; comes off the customer's balance (the invoice it names first, else the oldest unpaid), less any cash refunded; sales reports are net of returns |
 | Sale cost / profit | cost per unit is saved on each sales line when the invoice is saved |
 | Invoice due | paid on the invoice is applied to that invoice; separate payments go to the **oldest** unpaid invoices first |
 | Overdue | unpaid after the credit days (customer → customer type) |
+| Cheque | a cheque marked **Not yet paid** keeps the invoice due and makes it fall due on the cheque date; **Cheque cleared** on the invoice page then marks the invoice paid (on the invoice itself, not a FIFO payment). A cheque marked **Paid** settles the invoice at once. *Sales → Cheque not cleared* lists the cheques still out |
 
 ### Pricing for shops vs medical centers
 
@@ -129,7 +131,7 @@ Anything can still be changed on the invoice line. The sale is checked against s
 
 ## Modules
 
-Dashboard · Sales invoices (print preview A4/A5) · Shops & customers (types, credit limits, statements) ·
+Dashboard · Sales invoices (print preview A4/A5) · Sales returns (credit notes) · Shops & customers (types, credit limits, statements) ·
 Prices & discounts (types, price grid, free issues, printable price lists) · Products · Stock (adjustments,
 movements) · Purchases/GRN · Suppliers · Payments · Reports (product, customer, customer type, daily,
 aging) · Settings · Notifications (out/low stock, overdue, over limit, supplier dues, promotions ending).
@@ -141,9 +143,24 @@ All lists are paginated on the server (10/25/50/100 per page), sortable, searcha
 `products`, `products/options`, `products/:id`, `products/:id/movements`, `products/bulk-price`,
 `customer-types`, `price-rules`, `price-list?typeId=`, `promotions`, `pricing/context`,
 `customers`, `customers/:id`, `suppliers`, `suppliers/:id`,
-`sales`, `sales/:id`, `purchases`, `purchases/:id`, `payments`, `adjustments`,
+`sales`, `sales/:id`, `sales-returns`, `sales-returns/:id`, `purchases`, `purchases/:id`, `payments`, `adjustments`,
 `reports/summary|by-product|by-customer|by-type|daily|aging`, `dashboard`, `alerts`, `settings`, `export`.
 List endpoints accept `page`, `pageSize`, `search`, `sort`, `dir` and return `{ items, total, page, pageSize, summary }`.
+
+## Sales returns
+
+When a shop sends goods back, open the invoice and press **Return items** (or *Sales → Returns → New return*).
+The lines of that invoice appear priced as they were sold; type the quantity that came back on each one.
+A return can also be entered without an invoice (a general return priced at the customer's usual price).
+
+- **Back into stock** puts the units back on the shelf (they show as *Return* in the product's movements);
+  **Write off** records damaged or expired goods — stock does not change and the cost is lost.
+- The return total comes off the customer's balance: against the invoice it names first, otherwise against
+  the oldest unpaid invoices. Cash handed back is entered as **Refunded** and does not reduce the balance.
+- A return never takes back more than the invoice sold, and that invoice cannot be deleted (or edited below
+  the returned quantity) while the return exists. Deleting a restocked return is refused once its goods were sold on.
+- Returns are numbered `PJD-R000001`, … (prefix from Settings, own counter). Every sales figure — dashboard,
+  reports, assistant — is net of returns; the Reports page shows the returned amount next to Sales.
 
 ## Scanning invoice images
 

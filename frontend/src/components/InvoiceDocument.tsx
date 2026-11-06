@@ -18,6 +18,9 @@ export default function InvoiceDocument({
   lines,
   billDiscPct,
   paidAmount,
+  paidLabel = 'Paid',
+  balanceLabel = 'Balance',
+  signatures = ['Prepared by', 'Approved by', 'Customer'],
   footer,
 }: {
   title: string
@@ -28,6 +31,10 @@ export default function InvoiceDocument({
   lines: InvoiceLine[]
   billDiscPct: number
   paidAmount: number
+  /** wording of the two lines under the net total (a credit note says Refunded / Credited to account) */
+  paidLabel?: string
+  balanceLabel?: string
+  signatures?: string[]
   footer?: string
 }) {
   const t = invoiceTotals(lines, billDiscPct)
@@ -132,15 +139,15 @@ export default function InvoiceDocument({
           <dd className="text-right tabular-nums">{rs(t.billDiscount)}</dd>
           <dt className="border-t border-stone-800 pt-1 font-bold">Net Total</dt>
           <dd className="border-t border-stone-800 pt-1 text-right font-bold tabular-nums">{rs(t.netTotal)}</dd>
-          <dt className="text-stone-600">Paid</dt>
+          <dt className="text-stone-600">{paidLabel}</dt>
           <dd className="text-right tabular-nums text-stone-600">{rs(paidAmount)}</dd>
-          <dt className="text-stone-600">Balance</dt>
+          <dt className="text-stone-600">{balanceLabel}</dt>
           <dd className="text-right tabular-nums text-stone-600">{rs(t.netTotal - paidAmount)}</dd>
         </dl>
       </div>
 
       <div className="mt-12 grid grid-cols-3 gap-4 text-center text-[11px] text-stone-600 sm:mt-14 sm:gap-6">
-        {['Prepared by', 'Approved by', 'Customer'].map((s) => (
+        {signatures.map((s) => (
           <div key={s} className="border-t border-dotted border-stone-500 pt-1">{s}</div>
         ))}
       </div>

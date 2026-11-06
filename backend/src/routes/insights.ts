@@ -5,7 +5,7 @@ import { addDays, dateString, round2, settingsSchema, todayLK } from '@pjd/share
 import type { DB } from '../db/client'
 import * as schema from '../db/schema'
 import { parse } from '../errors'
-import { agingReport, buildAlerts, reportSummary, salesByCustomer, salesByProduct, salesByType, salesDaily } from '../services/reports'
+import { agingReport, buildAlerts, netSales, reportSummary, salesByCustomer, salesByProduct, salesByType, salesDaily } from '../services/reports'
 import { rows } from '../services/stock'
 import { productsWithStock } from './catalog'
 import { customersWithBalance, suppliersWithBalance } from './parties'
@@ -62,43 +62,34 @@ export function insightRoutes(db: DB) {
     const prevMonthEnd = addDays(monthStart, -1)
     const prevEnd = prevStart.slice(0, 8) + String(Math.min(Number(today.slice(8)), Number(prevMonthEnd.slice(8)))).padStart(2, '0')
     const from30 = addDays(today, -29)
-    const [[y], [pm], daily] = await Promise.all([
-      rows<{ revenue: number; n: number }>(db, sql`select coalesce(sum(net_total), 0) as revenue, count(*)::int as n from sales_invoices where date = ${yesterday}`),
-      rows<{ revenue: number; cost: number }>(db, sql`select coalesce(sum(net_total), 0) as revenue, coalesce(sum(cost_total), 0) as cost from sales_invoices where date >= ${prevStart} and date <= ${prevEnd}`),
-      rows<{ date: string; revenue: number; n: number }>(db, sql`select date::text as date, sum(net_total) as revenue, count(*)::int as n from sales_invoices where date >= ${from30} and date <= ${today} group by date`),
-    ])
+    // every sales figure here is net of sales returns (see services/reports.ts)
+    const [y, pm, daily] = await Promise.all([netSales(db, yesterday, yesterday), netSales(db, prevStart, prevEnd), salesDaily(db, from30, today)])
     const dayMap = new Map(daily.map((d) => [d.date, d]))
     const last30 = Array.from({ length: 30 }, (_, i) => {
       const date = addDays(from30, i)
       const d = dayMap.get(date)
-      return { date, revenue: round2(d?.revenue ?? 0), invoices: d?.n ?? 0 }
+      return { date, revenue: round2(d?.revenue ?? 0), invoices: d?.invoices ?? 0 }
     })
-    const [[t], [m], recent, top, byType, products, customers, suppliers] = await Promise.all([
-      rows<{ revenue: number; n: number; collected: number }>(db, sql`
-        select coalesce(sum(net_total), 0) as revenue, count(*)::int as n,
-               coalesce(sum(paid_on_invoice), 0) + coalesce((select sum(amount) from payments where party_type = 'customer' and date = ${today}), 0) as collected
-        from sales_invoices where date = ${today}`),
-      rows<{ revenue: number; cost: number; n: number }>(db, sql`select coalesce(sum(net_total), 0) as revenue, coalesce(sum(cost_total), 0) as cost, count(*)::int as n from sales_invoices where date >= ${monthStart} and date <= ${today}`),
+    const [t, [tc], m, recent, top, byType, products, customers, suppliers] = await Promise.all([
+      netSales(db, today, today),
+      rows<{ collected: number }>(db, sql`
+        select coalesce((select sum(paid_on_invoice) from sales_invoices where date = ${today}), 0)
+             + coalesce((select sum(amount) from payments where party_type = 'customer' and date = ${today}), 0)
+             - coalesce((select sum(refunded) from sales_returns where date = ${today}), 0) as collected`),
+      netSales(db, monthStart, today),
       rows(db, sql`select si.id, si.invoice_no as "invoiceNo", si.date::text as date, si.net_total as "netTotal", c.name as "customerName", ct.name as "typeName"
                    from sales_invoices si join customers c on c.id = si.customer_id join customer_types ct on ct.id = c.type_id
                    order by si.date desc, si.id desc limit 8`),
-      rows<{ productId: number; label: string; revenue: number; qty: number }>(db, sql`
-        select p.id as "productId", p.size || ' ' || p.name as label, sum(sl.line_net * (1 - si.bill_disc_pct / 100)) as revenue, sum(sl.qty)::int as qty
-        from sales_lines sl join sales_invoices si on si.id = sl.invoice_id join products p on p.id = sl.product_id
-        where si.date >= ${monthStart} and si.date <= ${today}
-        group by p.id order by revenue desc limit 6`),
-      rows<{ name: string; revenue: number }>(db, sql`
-        select ct.name, coalesce(sum(si.net_total), 0) as revenue from customer_types ct
-        left join customers c on c.type_id = ct.id left join sales_invoices si on si.customer_id = c.id and si.date >= ${monthStart} and si.date <= ${today}
-        group by ct.id, ct.sort order by ct.sort`),
+      salesByProduct(db, monthStart, today).then((list) => list.slice(0, 6)),
+      salesByType(db, monthStart, today),
       productsWithStock(db),
       customersWithBalance(db),
       suppliersWithBalance(db),
     ])
     const active = products.filter((p) => p.active)
     res.json({
-      today: { revenue: round2(t.revenue), invoices: t.n, collected: round2(t.collected), yesterday: round2(y.revenue) },
-      month: { revenue: round2(m.revenue), profit: round2(m.revenue - m.cost), invoices: m.n, lastMonthSameDays: round2(pm.revenue), lastMonthProfit: round2(pm.revenue - pm.cost) },
+      today: { revenue: t.revenue, invoices: t.invoices, collected: round2(tc.collected), yesterday: y.revenue },
+      month: { revenue: m.revenue, profit: round2(m.revenue - m.cost), invoices: m.invoices, returned: m.returned, lastMonthSameDays: pm.revenue, lastMonthProfit: round2(pm.revenue - pm.cost) },
       last30,
       toCollect: customers
         .filter((c) => c.balance > 0.004)
@@ -117,8 +108,8 @@ export function insightRoutes(db: DB) {
       overdue: round2(customers.reduce((s, c) => s + c.overdue, 0)),
       payable: round2(suppliers.reduce((s, c) => s + Math.max(c.balance, 0), 0)),
       recent,
-      topProducts: top.map((x) => ({ ...x, revenue: round2(x.revenue) })),
-      byType: byType.map((x) => ({ ...x, revenue: round2(x.revenue) })),
+      topProducts: top.map((x) => ({ productId: x.productId, label: x.label, revenue: x.revenue, qty: x.qty })),
+      byType: byType.map((x) => ({ name: x.name, revenue: x.revenue })),
       lowStock: active
         .filter((p) => p.onHand <= p.reorderLevel)
         .sort((a, b) => a.onHand - b.onHand)
@@ -137,10 +128,10 @@ export function insightRoutes(db: DB) {
     const tables = {
       settings: schema.settings, customerTypes: schema.customerTypes, products: schema.products, priceRules: schema.priceRules,
       promotions: schema.promotions, customers: schema.customers, suppliers: schema.suppliers, salesInvoices: schema.salesInvoices,
-      salesLines: schema.salesLines, purchaseInvoices: schema.purchaseInvoices, purchaseLines: schema.purchaseLines,
+      salesLines: schema.salesLines, salesReturns: schema.salesReturns, salesReturnLines: schema.salesReturnLines, purchaseInvoices: schema.purchaseInvoices, purchaseLines: schema.purchaseLines,
       payments: schema.payments, stockAdjustments: schema.stockAdjustments, invoiceImages: schema.invoiceImages, assistantRequests: schema.assistantRequests,
     }
-    const out: Record<string, unknown> = { exportedAt: new Date().toISOString(), version: 3 }
+    const out: Record<string, unknown> = { exportedAt: new Date().toISOString(), version: 4 }
     for (const [k, t] of Object.entries(tables)) {
       const list = (await db.select().from(t as typeof schema.products)) as Record<string, unknown>[]
       out[k] = k === 'settings' ? list.map(publicSettings) : list

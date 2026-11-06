@@ -181,18 +181,22 @@ export function CustomerForm({ customer, onClose, onDeleted }: { customer: Custo
   )
 }
 
+/** where a statement line points: the invoice, or the sales return */
+const statementLink = (kind: 'customer' | 'supplier', r: StatementRow) =>
+  !r.refId ? null : r.type === 'Return' || r.type === 'Refund' ? `/sales/returns/${r.refId}` : r.type === 'Invoice' ? (kind === 'customer' ? `/sales/${r.refId}` : `/purchases/${r.refId}`) : null
+
 const statementCols: Column<StatementRow>[] = [
   { key: 'date', header: 'Date', render: (r) => <span className="text-stone-500">{r.date}</span> },
-  { key: 'ref', header: 'Reference', render: (r) => r.ref },
+  { key: 'ref', header: 'Reference', render: (r) => { const to = statementLink('customer', r); return to ? <Link className="text-brand-700 hover:underline" to={to}>{r.ref}</Link> : r.ref } },
   { key: 'type', header: 'Detail', render: (r) => <span className="text-stone-500">{r.type}{r.note ? ` · ${r.note}` : ''}</span> },
-  { key: 'debit', header: 'Billed', align: 'right', render: (r) => (r.debit ? rs(r.debit) : '') },
-  { key: 'credit', header: 'Paid', align: 'right', render: (r) => (r.credit ? <span className="text-brand-700">{rs(r.credit)}</span> : '') },
+  { key: 'debit', header: 'Billed', align: 'right', render: (r) => (r.debit ? <span className={r.type === 'Refund' ? 'text-amber-700' : ''}>{rs(r.debit)}</span> : '') },
+  { key: 'credit', header: 'Paid / credited', align: 'right', render: (r) => (r.credit ? <span className="text-brand-700">{rs(r.credit)}</span> : '') },
   { key: 'bal', header: 'Balance', align: 'right', render: (r) => <span className="font-medium">{rs(r.balance)}</span> },
 ]
 
 /** Phone layout for statement rows: reference + detail on the left, money on the right. */
 const statementCard = (kind: 'customer' | 'supplier') => (r: StatementRow) => {
-  const to = r.refId && r.type === 'Invoice' ? (kind === 'customer' ? `/sales/${r.refId}` : `/purchases/${r.refId}`) : null
+  const to = statementLink(kind, r)
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
@@ -200,8 +204,8 @@ const statementCard = (kind: 'customer' | 'supplier') => (r: StatementRow) => {
         <p className="text-xs text-stone-500">{r.date} · {r.type}{r.note ? ` · ${r.note}` : ''}</p>
       </div>
       <div className="shrink-0 text-right text-sm tabular-nums">
-        {r.debit ? <p>Billed {rs(r.debit)}</p> : null}
-        {r.credit ? <p className="text-brand-700">Paid {rs(r.credit)}</p> : null}
+        {r.debit ? <p>{r.type === 'Refund' ? 'Refunded' : 'Billed'} {rs(r.debit)}</p> : null}
+        {r.credit ? <p className="text-brand-700">{r.type === 'Return' ? 'Returned' : 'Paid'} {rs(r.credit)}</p> : null}
         <p className="text-xs text-stone-500">Balance {rs(r.balance)}</p>
       </div>
     </div>
@@ -233,7 +237,7 @@ export function CustomerDetail() {
             <button className="btn-secondary" onClick={() => setEditing(true)}><Pencil size={15} /> Edit</button>
             <button className="btn-secondary" onClick={() => downloadExcel(`statement-${c.name.replace(/\W+/g, '-')}`, [{
               name: 'Statement',
-              columns: [{ header: 'Date' }, { header: 'Reference' }, { header: 'Detail' }, { header: 'Billed', type: 'money' }, { header: 'Paid', type: 'money' }, { header: 'Balance', type: 'money' }],
+              columns: [{ header: 'Date' }, { header: 'Reference' }, { header: 'Detail' }, { header: 'Billed', type: 'money' }, { header: 'Paid / credited', type: 'money' }, { header: 'Balance', type: 'money' }],
               rows: q.data!.statement.map((r) => [r.date, r.ref, [r.type, r.note].filter(Boolean).join(' · '), r.debit || null, r.credit || null, r.balance]),
               totals: [3, 4],
             }])}><FileSpreadsheet size={15} /> Statement</button>
@@ -243,7 +247,7 @@ export function CustomerDetail() {
         }
       />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Total billed" value={`Rs ${rs(c.billed)}`} hint={`${c.invoices} invoices`} />
+        <Stat label="Total billed" value={`Rs ${rs(c.billed)}`} hint={`${c.invoices} invoices${c.returned ? ` · less Rs ${rs(c.returned)} returned` : ''}`} />
         <Stat label="Total paid" value={`Rs ${rs(c.paid)}`} tone="good" />
         <Stat label={c.balance < 0 ? 'Credit' : 'Balance'} value={`Rs ${rs(Math.abs(c.balance))}`} tone={c.overLimit ? 'bad' : c.balance > 0.004 ? 'warn' : 'default'} hint={c.creditLimit ? `Limit Rs ${rs(c.creditLimit)}` : 'No credit limit'} />
         <Stat label="Overdue" value={`Rs ${rs(c.overdue)}`} tone={c.overdue > 0 ? 'bad' : 'default'} hint={c.oldestDueDate ? `oldest due ${c.oldestDueDate}` : undefined} />
@@ -369,7 +373,7 @@ export function SupplierDetail() {
   if (q.isLoading) return <Spinner />
   if (q.error || !q.data) return <div><PageHeader title="Supplier" back={{ to: '/suppliers', label: 'Suppliers' }} /><ErrorBox error={q.error ?? 'Not found'} /></div>
   const x = q.data.supplier
-  const cols = statementCols.map((c) => (c.key === 'ref' ? { ...c, render: (r: StatementRow) => (r.refId && r.type === 'Invoice' ? <Link className="text-brand-700 hover:underline" to={`/purchases/${r.refId}`}>{r.ref}</Link> : r.ref) } : c))
+  const cols = statementCols.map((c) => (c.key === 'ref' ? { ...c, render: (r: StatementRow) => { const to = statementLink('supplier', r); return to ? <Link className="text-brand-700 hover:underline" to={to}>{r.ref}</Link> : r.ref } } : c))
   return (
     <div>
       <PageHeader back={{ to: '/suppliers', label: 'Suppliers' }} title={x.name} subtitle={[x.phone, x.address].filter(Boolean).join(' · ')} actions={<><button className="btn-secondary" onClick={() => setEditing(true)}><Pencil size={15} /> Edit</button><button className="btn-primary" onClick={() => setPaying(true)}><Wallet size={15} /> Pay supplier</button></>} />

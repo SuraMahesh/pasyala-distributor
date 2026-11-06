@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { round2 } from './calc'
-import { ADJ_REASONS, CATEGORIES, PAY_METHODS } from './types'
+import { invoiceTotals, round2, type CalcLine } from './calc'
+import { ADJ_REASONS, CATEGORIES, PAY_METHODS, RETURN_REASONS } from './types'
 
 const isRealDate = (d: string) => {
   const t = new Date(`${d}T00:00:00Z`)
@@ -31,6 +31,7 @@ export const settingsSchema = z.object({
   email: text(100).refine((v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Enter a valid email address'),
   invoicePrefix: text(10),
   nextInvoiceNo: z.number().int().min(1).max(1_000_000_000),
+  nextReturnNo: z.number().int().min(1).max(1_000_000_000).default(1),
   footerNote: text(300),
   supplierCustomerCode: text(30),
   allowNegativeStock: z.boolean(),
@@ -129,18 +130,42 @@ const invoiceBase = {
   billDiscPct: pct,
   paidOnInvoice: money,
   notes: text(300),
+  chequeNo: text(40),
+  chequeDate: date.nullable().default(null),
   lines: z.array(lineSchema).min(1, 'Add at least one item').max(500, 'An invoice can have at most 500 lines'),
 }
+/** A cheque that is not paid yet must carry its date — that is when the money falls due. */
+const chequeDateRule = (i: { payMethod: string; chequeDate: string | null; paidOnInvoice: number; billDiscPct: number; lines: CalcLine[] }) =>
+  i.payMethod !== 'Cheque' || !!i.chequeDate || i.paidOnInvoice + 0.004 >= invoiceTotals(i.lines, i.billDiscPct).netTotal
+const chequeDateMessage = { message: 'Enter the cheque date — the cheque is not paid yet', path: ['chequeDate'] }
 
-export const salesInvoiceSchema = z.object({ ...invoiceBase, customerId: z.number().int({ message: 'Choose a customer' }) })
+export const salesInvoiceSchema = z.object({ ...invoiceBase, customerId: z.number().int({ message: 'Choose a customer' }) }).refine(chequeDateRule, chequeDateMessage)
 
-export const purchaseInvoiceSchema = z.object({
-  ...invoiceBase,
-  supplierId: z.number().int({ message: 'Choose a supplier' }),
-  invoiceNo: reqText('Supplier invoice no', 40).transform((s) => s.toUpperCase()),
-  orderNo: text(40),
-  salesPerson: text(60),
-})
+export const purchaseInvoiceSchema = z
+  .object({
+    ...invoiceBase,
+    supplierId: z.number().int({ message: 'Choose a supplier' }),
+    invoiceNo: reqText('Supplier invoice no', 40).transform((s) => s.toUpperCase()),
+    orderNo: text(40),
+    salesPerson: text(60),
+  })
+  .refine(chequeDateRule, chequeDateMessage)
+
+/** Sales return (credit note). Lines are priced as sold; the net total comes off the customer's balance unless refunded in cash. */
+export const salesReturnSchema = z
+  .object({
+    date,
+    customerId: z.number().int({ message: 'Choose a customer' }),
+    salesInvoiceId: z.number().int().positive().nullable().default(null),
+    reason: z.enum(RETURN_REASONS),
+    restock: z.boolean().default(true),
+    billDiscPct: pct,
+    refunded: money,
+    refundMethod: z.enum(['', 'Cash', 'Cheque', 'Bank Transfer']).default(''),
+    notes: text(300),
+    lines: z.array(lineSchema).min(1, 'Add at least one item').max(500, 'A return can have at most 500 lines'),
+  })
+  .refine((r) => r.refunded <= 0 || r.refundMethod !== '', { message: 'Choose how the money was refunded', path: ['refundMethod'] })
 
 export const paymentSchema = z
   .object({
@@ -179,8 +204,11 @@ export type PromotionInput = z.infer<typeof promotionSchema>
 export type CustomerInput = z.infer<typeof customerSchema>
 export type SupplierInput = z.infer<typeof supplierSchema>
 export type LineInput = z.infer<typeof lineSchema>
-export type SalesInvoiceInput = z.infer<typeof salesInvoiceSchema>
-export type PurchaseInvoiceInput = z.infer<typeof purchaseInvoiceSchema>
+/** cheque fields are optional for callers inside the server (importers, seed); the API always fills them in */
+type WithOptionalCheque<T> = Omit<T, 'chequeNo' | 'chequeDate'> & { chequeNo?: string; chequeDate?: string | null }
+export type SalesInvoiceInput = WithOptionalCheque<z.infer<typeof salesInvoiceSchema>>
+export type SalesReturnInput = z.infer<typeof salesReturnSchema>
+export type PurchaseInvoiceInput = WithOptionalCheque<z.infer<typeof purchaseInvoiceSchema>>
 export type PaymentInput = z.infer<typeof paymentSchema>
 export type AdjustmentInput = z.infer<typeof adjustmentSchema>
 export type ListQuery = z.infer<typeof listQuerySchema>

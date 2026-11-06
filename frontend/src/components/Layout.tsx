@@ -14,6 +14,7 @@ import {
   Settings,
   Tags,
   Truck,
+  Undo2,
   Users,
   Wallet,
   X,
@@ -26,9 +27,11 @@ import { useConfirm } from './Confirm'
 import NotificationBell from './NotificationBell'
 import VersionWarning from './VersionWarning'
 
-const NAV = [
+/** `except`: a sub-area with its own entry (so /sales/returns lights up "Sales Returns", not "Sales Invoices") */
+const NAV: { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean; except?: string }[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/sales', label: 'Sales Invoices', icon: FileOutput },
+  { to: '/sales', label: 'Sales Invoices', icon: FileOutput, except: '/sales/returns' },
+  { to: '/sales/returns', label: 'Sales Returns', icon: Undo2 },
   { to: '/customers', label: 'Shops & Customers', icon: Users },
   { to: '/pricing', label: 'Prices & Discounts', icon: Tags },
   { to: '/products', label: 'Products', icon: Package },
@@ -62,20 +65,21 @@ export default function Layout() {
   }
   useEffect(() => setOpen(false), [loc.pathname])
   useEffect(() => {
-    const current = NAV.find((n) => (n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to)))?.label
+    // the most specific entry wins (/sales/returns is "Sales Returns", not "Sales Invoices")
+    const current = [...NAV].sort((a, b) => b.to.length - a.to.length).find((n) => (n.end ? loc.pathname === n.to : loc.pathname.startsWith(n.to)))?.label
     document.title = [current, settings?.name].filter(Boolean).join(' · ') || 'ERP'
   }, [settings?.name, loc.pathname])
 
   const nav = (
     <nav className="flex flex-col gap-0.5 p-3">
-      {NAV.map(({ to, label, icon: Icon, end }) => (
+      {NAV.map(({ to, label, icon: Icon, end, except }) => (
         <NavLink
           key={to}
           to={to}
           end={end}
           className={({ isActive }) =>
             `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition lg:py-2 ${
-              isActive ? 'bg-brand-700 text-white' : 'text-brand-100 hover:bg-brand-800 hover:text-white'
+              isActive && !(except && loc.pathname.startsWith(except)) ? 'bg-brand-700 text-white' : 'text-brand-100 hover:bg-brand-800 hover:text-white'
             }`
           }
         >

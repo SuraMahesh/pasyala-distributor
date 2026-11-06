@@ -105,6 +105,26 @@ describe('FIFO dues', () => {
     expect(summary.oldestDueDate).toBe('2026-10-01')
   })
 
+  it('a return against an invoice settles that invoice first; a general return goes to the oldest', () => {
+    const { byInvoice, summary } = allocateDues([{ ...inv(1, '2026-10-01', 1000), credited: 300 }, inv(2, '2026-10-05', 500)], 0, '2026-10-12', 200)
+    expect(byInvoice.get(1)).toMatchObject({ paid: 500, credited: 300, due: 500, status: 'partial' })
+    expect(byInvoice.get(2)).toMatchObject({ paid: 0, credited: 0, due: 500, status: 'unpaid' })
+    expect(summary).toMatchObject({ billed: 1500, paid: 0, returned: 500, balance: 1000 })
+  })
+
+  it('a return bigger than its invoice spills over to the other invoices', () => {
+    const { byInvoice, summary } = allocateDues([{ ...inv(1, '2026-10-01', 1000, 1000), credited: 400 }, inv(2, '2026-10-05', 500)], 0, '2026-10-12')
+    expect(byInvoice.get(1)).toMatchObject({ paid: 1000, credited: 400, due: 0, status: 'paid' })
+    expect(byInvoice.get(2)).toMatchObject({ paid: 400, due: 100, status: 'partial' })
+    expect(summary).toMatchObject({ billed: 1500, paid: 1000, returned: 400, balance: 100 })
+  })
+
+  it('a cheque that is not paid yet falls due on the cheque date, not after the credit days', () => {
+    const { byInvoice } = allocateDues([{ ...inv(1, '2026-10-01', 1000, 0, 30), dueDate: '2026-11-20' }], 0, '2026-11-10')
+    expect(byInvoice.get(1)).toMatchObject({ due: 1000, dueDate: '2026-11-20', overdue: false })
+    expect(allocateDues([{ ...inv(1, '2026-10-01', 1000, 0, 30), dueDate: '2026-11-05' }], 0, '2026-11-10').byInvoice.get(1)?.overdue).toBe(true)
+  })
+
   it('over-payment becomes credit (negative balance)', () => {
     const { byInvoice, summary } = allocateDues([inv(1, '2026-10-01', 1000, 1200)], 0, '2026-10-12')
     expect(byInvoice.get(1)?.status).toBe('paid')

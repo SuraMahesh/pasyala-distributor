@@ -54,10 +54,22 @@ export async function statement(ex: Executor, kind: 'customer' | 'supplier', id:
     : sql`select date::text, reference, id, amount, method, notes, created_at from payments where supplier_id = ${id}`
   const invoices = await rows<{ date: string; ref: string; refId: number; net_total: number; paid_on_invoice: number; pay_method: string; created_at: string }>(ex, inv)
   const pays = await rows<{ date: string; reference: string; id: number; amount: number; method: string; notes: string; created_at: string }>(ex, pay)
+  // goods sent back: the return total comes off the balance; cash refunded goes back on
+  const returns = kind === 'customer'
+    ? await rows<{ date: string; ref: string; refId: number; net_total: number; refunded: number; refund_method: string; reason: string; invoice_no: string | null; created_at: string }>(
+        ex,
+        sql`select r.date::text, r.return_no as ref, r.id as "refId", r.net_total, r.refunded, r.refund_method, r.reason, si.invoice_no, r.created_at
+            from sales_returns r left join sales_invoices si on si.id = r.sales_invoice_id where r.customer_id = ${id}`,
+      )
+    : []
   const list: (Omit<StatementRow, 'balance'> & { order: string })[] = []
   for (const i of invoices) {
     list.push({ date: i.date, type: 'Invoice', ref: i.ref, refId: i.refId, debit: i.net_total, credit: 0, note: i.pay_method, order: `${new Date(i.created_at).toISOString()}-0` })
     if (i.paid_on_invoice > 0) list.push({ date: i.date, type: 'Paid on invoice', ref: i.ref, refId: i.refId, debit: 0, credit: i.paid_on_invoice, note: i.pay_method, order: `${new Date(i.created_at).toISOString()}-1` })
+  }
+  for (const r of returns) {
+    list.push({ date: r.date, type: 'Return', ref: r.ref, refId: r.refId, debit: 0, credit: r.net_total, note: [r.reason, r.invoice_no ? `against ${r.invoice_no}` : ''].filter(Boolean).join(' · '), order: `${new Date(r.created_at).toISOString()}-3` })
+    if (r.refunded > 0) list.push({ date: r.date, type: 'Refund', ref: r.ref, refId: r.refId, debit: r.refunded, credit: 0, note: r.refund_method, order: `${new Date(r.created_at).toISOString()}-4` })
   }
   for (const p of pays) list.push({ date: p.date, type: 'Payment', ref: p.reference || `PAY-${p.id}`, refId: null, debit: 0, credit: p.amount, note: [p.method, p.notes].filter(Boolean).join(' · '), order: `${new Date(p.created_at).toISOString()}-2` })
   list.sort((a, b) => a.date.localeCompare(b.date) || a.order.localeCompare(b.order))

@@ -8,6 +8,7 @@ import {
   purchaseInvoiceSchema,
   round2,
   salesInvoiceSchema,
+  salesReturnSchema,
 } from '@pjd/shared'
 import type { DB } from '../db/client'
 import {
@@ -17,13 +18,15 @@ import {
   products,
   purchaseInvoices,
   salesInvoices,
+  salesReturns,
   stockAdjustments,
   suppliers,
 } from '../db/schema'
 import { badRequest, idParam, notFound, parse } from '../errors'
 import { paginate } from '../lib/list'
 import { customerDues, supplierDues } from '../services/dues'
-import { deletePurchase, deleteSale, getPurchase, getSale, savePurchase, saveSale } from '../services/invoices'
+import { deletePurchase, deleteSale, getPurchase, getSale, markChequeCleared, savePurchase, saveSale } from '../services/invoices'
+import { deleteReturn, getReturn, saveReturn } from '../services/returns'
 import { assertStockAvailable } from '../services/stock'
 import { purchaseUsage } from '../services/usage'
 import { removeFiles } from '../services/files'
@@ -33,7 +36,7 @@ const dateRange = {
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('').transform(() => undefined)),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('').transform(() => undefined)),
 }
-const statusFilter = z.enum(['', 'paid', 'due', 'overdue']).default('')
+const statusFilter = z.enum(['', 'paid', 'due', 'overdue', 'cheque']).default('') // cheque = paid by cheque, cheque not cleared yet
 const imagesFilter = z.enum(['', 'has', 'none']).default('')
 const byImages = <T extends { imageCount: number }>(items: T[], f: string) => (f === 'has' ? items.filter((i) => i.imageCount > 0) : f === 'none' ? items.filter((i) => i.imageCount === 0) : items)
 
@@ -65,6 +68,7 @@ export function transactionRoutes(db: DB) {
         .select({
           id: salesInvoices.id, invoiceNo: salesInvoices.invoiceNo, date: salesInvoices.date, payMethod: salesInvoices.payMethod,
           netTotal: salesInvoices.netTotal, costTotal: salesInvoices.costTotal, paidOnInvoice: salesInvoices.paidOnInvoice,
+          chequeNo: salesInvoices.chequeNo, chequeDate: salesInvoices.chequeDate,
           customerId: salesInvoices.customerId, partyName: customers.name, area: customers.area, typeName: customerTypes.name,
           imageCount: sql<number>`(select count(*)::int from invoice_images ii where ii.sales_invoice_id = ${salesInvoices.id})`,
         })
@@ -78,9 +82,10 @@ export function transactionRoutes(db: DB) {
     if (q.status === 'paid') items = items.filter((i) => i.status === 'paid')
     if (q.status === 'due') items = items.filter((i) => i.status !== 'paid')
     if (q.status === 'overdue') items = items.filter((i) => i.overdue)
+    if (q.status === 'cheque') items = items.filter((i) => i.payMethod === 'Cheque' && i.status !== 'paid')
     items = byImages(items, q.images)
     const { filtered, ...page } = paginate(items, q, {
-      search: (i) => `${i.invoiceNo} ${i.partyName} ${i.area} ${i.typeName}`,
+      search: (i) => `${i.invoiceNo} ${i.partyName} ${i.area} ${i.typeName} ${i.chequeNo}`,
       sorters: invoiceSorters,
       defaultSort: { key: 'date', dir: 'desc' },
     })
@@ -90,11 +95,52 @@ export function transactionRoutes(db: DB) {
   r.get('/sales/:id', async (req, res) => res.json(await getSale(db, idParam(req.params.id))))
   r.post('/sales', async (req, res) => res.status(201).json(await saveSale(db, parse(salesInvoiceSchema, req.body))))
   r.put('/sales/:id', async (req, res) => res.json(await saveSale(db, parse(salesInvoiceSchema, req.body), idParam(req.params.id))))
+  /** the customer's cheque has cleared — the invoice is paid on the invoice itself */
+  r.post('/sales/:id/cheque-cleared', async (req, res) => res.json(await markChequeCleared(db, 'sale', idParam(req.params.id))))
   r.delete('/sales/:id', async (req, res) => {
     const id = idParam(req.params.id)
     const files = await imagesOf(db, 'sale', id)
     await deleteSale(db, id)
     await removeFiles(files) // photos go with the invoice
+    res.json({ ok: true })
+  })
+
+  // ---------------- sales returns (credit notes)
+  r.get('/sales-returns', async (req, res) => {
+    const q = listQuerySchema.extend({ ...dateRange, customerId: z.coerce.number().int().optional(), salesInvoiceId: z.coerce.number().int().optional(), restock: z.enum(['', 'yes', 'no']).default('') }).parse(req.query)
+    const where: SQL[] = []
+    if (q.from) where.push(gte(salesReturns.date, q.from))
+    if (q.to) where.push(lte(salesReturns.date, q.to))
+    if (q.customerId) where.push(eq(salesReturns.customerId, q.customerId))
+    if (q.salesInvoiceId) where.push(eq(salesReturns.salesInvoiceId, q.salesInvoiceId))
+    if (q.restock) where.push(eq(salesReturns.restock, q.restock === 'yes'))
+    const list = await db
+      .select({
+        id: salesReturns.id, returnNo: salesReturns.returnNo, date: salesReturns.date, customerId: salesReturns.customerId, partyName: customers.name, typeName: customerTypes.name,
+        salesInvoiceId: salesReturns.salesInvoiceId, invoiceNo: salesInvoices.invoiceNo, reason: salesReturns.reason, restock: salesReturns.restock,
+        netTotal: salesReturns.netTotal, costTotal: salesReturns.costTotal, refunded: salesReturns.refunded, refundMethod: salesReturns.refundMethod,
+        lineCount: sql<number>`(select count(*)::int from sales_return_lines rl where rl.return_id = ${salesReturns.id})`,
+        units: sql<number>`(select coalesce(sum(qty + free_qty), 0)::int from sales_return_lines rl where rl.return_id = ${salesReturns.id})`,
+      })
+      .from(salesReturns)
+      .innerJoin(customers, eq(customers.id, salesReturns.customerId))
+      .innerJoin(customerTypes, eq(customerTypes.id, customers.typeId))
+      .leftJoin(salesInvoices, eq(salesInvoices.id, salesReturns.salesInvoiceId))
+      .where(where.length ? and(...where) : undefined)
+    const items = list.map((i) => ({ ...i, credited: round2(i.netTotal - i.refunded) }))
+    const { filtered, ...page } = paginate(items, q, {
+      search: (i) => `${i.returnNo} ${i.partyName} ${i.invoiceNo ?? ''} ${i.reason} ${i.typeName}`,
+      sorters: { returnNo: (i) => i.returnNo, date: (i) => `${i.date}-${String(i.id).padStart(9, '0')}`, netTotal: (i) => i.netTotal, credited: (i) => i.credited, party: (i) => i.partyName },
+      defaultSort: { key: 'date', dir: 'desc' },
+    })
+    const sum = (f: (i: (typeof items)[number]) => number) => round2(filtered.reduce((s, i) => s + f(i), 0))
+    res.json({ ...page, summary: { count: filtered.length, netTotal: sum((i) => i.netTotal), refunded: sum((i) => i.refunded), credited: sum((i) => i.credited), units: filtered.reduce((s, i) => s + i.units, 0) } })
+  })
+  r.get('/sales-returns/:id', async (req, res) => res.json(await getReturn(db, idParam(req.params.id))))
+  r.post('/sales-returns', async (req, res) => res.status(201).json(await saveReturn(db, parse(salesReturnSchema, req.body))))
+  r.put('/sales-returns/:id', async (req, res) => res.json(await saveReturn(db, parse(salesReturnSchema, req.body), idParam(req.params.id))))
+  r.delete('/sales-returns/:id', async (req, res) => {
+    await deleteReturn(db, idParam(req.params.id))
     res.json({ ok: true })
   })
 
@@ -110,6 +156,7 @@ export function transactionRoutes(db: DB) {
         .select({
           id: purchaseInvoices.id, invoiceNo: purchaseInvoices.invoiceNo, orderNo: purchaseInvoices.orderNo, date: purchaseInvoices.date,
           payMethod: purchaseInvoices.payMethod, netTotal: purchaseInvoices.netTotal, paidOnInvoice: purchaseInvoices.paidOnInvoice,
+          chequeNo: purchaseInvoices.chequeNo, chequeDate: purchaseInvoices.chequeDate,
           subTotal: purchaseInvoices.subTotal, billDiscPct: purchaseInvoices.billDiscPct, billDiscount: purchaseInvoices.billDiscount,
           supplierId: purchaseInvoices.supplierId, partyName: suppliers.name,
           lineCount: sql<number>`(select count(*)::int from purchase_lines pl where pl.invoice_id = ${purchaseInvoices.id})`,
@@ -126,9 +173,10 @@ export function transactionRoutes(db: DB) {
     if (q.status === 'paid') items = items.filter((i) => i.status === 'paid')
     if (q.status === 'due') items = items.filter((i) => i.status !== 'paid')
     if (q.status === 'overdue') items = items.filter((i) => i.overdue)
+    if (q.status === 'cheque') items = items.filter((i) => i.payMethod === 'Cheque' && i.status !== 'paid')
     items = byImages(items, q.images)
     const { filtered, ...page } = paginate(items, q, {
-      search: (i) => `${i.invoiceNo} ${i.orderNo} ${i.partyName}`,
+      search: (i) => `${i.invoiceNo} ${i.orderNo} ${i.partyName} ${i.chequeNo}`,
       sorters: { ...invoiceSorters, billDiscount: (i: { billDiscount: number }) => i.billDiscount },
       defaultSort: { key: 'date', dir: 'desc' },
     })
@@ -146,6 +194,7 @@ export function transactionRoutes(db: DB) {
   r.get('/purchases/:id', async (req, res) => res.json(await getPurchase(db, idParam(req.params.id))))
   r.post('/purchases', async (req, res) => res.status(201).json(await savePurchase(db, parse(purchaseInvoiceSchema, req.body))))
   r.put('/purchases/:id', async (req, res) => res.json(await savePurchase(db, parse(purchaseInvoiceSchema, req.body), idParam(req.params.id))))
+  r.post('/purchases/:id/cheque-cleared', async (req, res) => res.json(await markChequeCleared(db, 'purchase', idParam(req.params.id))))
   r.delete('/purchases/:id', async (req, res) => {
     const id = idParam(req.params.id)
     const files = await imagesOf(db, 'purchase', id)

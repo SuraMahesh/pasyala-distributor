@@ -120,7 +120,7 @@ export default function Reports() {
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Sales" value={`Rs ${rs(s?.revenue)}`} hint={`${s?.invoices ?? 0} invoices · ${s?.unitsSold ?? 0} units + ${s?.freeUnits ?? 0} free`} />
+        <Stat label="Sales" value={`Rs ${rs(s?.revenue)}`} hint={`${s?.invoices ?? 0} invoices · ${s?.unitsSold ?? 0} units + ${s?.freeUnits ?? 0} free${s?.returned ? ` · after Rs ${rs(s.returned)} returns` : ''}`} />
         <Stat label="Gross profit" value={`Rs ${rs(s?.profit)}`} tone={(s?.profit ?? 0) < 0 ? 'bad' : 'good'} hint={`${s?.margin ?? 0}% margin · vs purchase cost`} />
         <Stat label="Cash collected" value={`Rs ${rs(s?.collected)}`} hint={`To collect now Rs ${rs(s?.receivable)}`} />
         <Stat label="Purchases" value={`Rs ${rs(s?.purchases)}`} hint={`Paid out Rs ${rs(s?.paidOut)} · owe Rs ${rs(s?.payable)}`} />

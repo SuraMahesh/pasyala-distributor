@@ -303,8 +303,8 @@ export function ProductDetail() {
 
   const mcols: Column<Movement>[] = [
     { key: 'date', header: 'Date', render: (m) => <span className="text-stone-500">{m.date === '0000-00-00' ? '—' : m.date}</span> },
-    { key: 'type', header: 'Type', render: (m) => <Badge tone={m.type === 'Purchase' ? 'green' : m.type === 'Sale' ? 'blue' : 'gray'}>{m.type}</Badge> },
-    { key: 'ref', header: 'Reference', render: (m) => (m.refId && m.type !== 'Adjustment' ? <Link className="text-brand-700 hover:underline" to={`/${m.type === 'Sale' ? 'sales' : 'purchases'}/${m.refId}`}>{m.ref}</Link> : m.ref) },
+    { key: 'type', header: 'Type', render: (m) => <Badge tone={m.type === 'Purchase' ? 'green' : m.type === 'Sale' ? 'blue' : m.type === 'Return' ? 'amber' : 'gray'}>{m.type}</Badge> },
+    { key: 'ref', header: 'Reference', render: (m) => (m.refId && m.type !== 'Adjustment' ? <Link className="text-brand-700 hover:underline" to={`/${m.type === 'Sale' ? 'sales' : m.type === 'Return' ? 'sales/returns' : 'purchases'}/${m.refId}`}>{m.ref}</Link> : m.ref) },
     { key: 'party', header: 'Party / note', hideBelow: 'lg', render: (m) => <span className="text-stone-500">{m.party}</span> },
     { key: 'in', header: 'In', align: 'right', render: (m) => (m.qtyIn ? <span className="text-brand-700">+{m.qtyIn}</span> : '') },
     { key: 'out', header: 'Out', align: 'right', render: (m) => (m.qtyOut ? <span className="text-red-600">−{m.qtyOut}</span> : '') },

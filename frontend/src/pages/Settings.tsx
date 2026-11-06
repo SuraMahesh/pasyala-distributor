@@ -47,10 +47,11 @@ export default function Settings() {
         typeId: ['Customer type', name(d.customerTypes, (r) => String(r.name))],
         customerTypeId: ['Customer type', name(d.customerTypes, (r) => String(r.name))],
       }
-      const invoiceNos = { salesLines: name(d.salesInvoices, (r) => String(r.invoiceNo)), purchaseLines: name(d.purchaseInvoices, (r) => String(r.invoiceNo)) }
+      const invoiceNos = { salesLines: name(d.salesInvoices, (r) => String(r.invoiceNo)), purchaseLines: name(d.purchaseInvoices, (r) => String(r.invoiceNo)), salesReturnLines: name(d.salesReturns, (r) => String(r.returnNo)) }
+      lookups.salesInvoiceId = ['Against invoice', name(d.salesInvoices, (r) => String(r.invoiceNo))]
       const titles: Record<string, string> = {
         products: 'Products', customerTypes: 'Customer types', customers: 'Customers', suppliers: 'Suppliers', priceRules: 'Price rules',
-        promotions: 'Free issues', salesInvoices: 'Sales invoices', salesLines: 'Sales lines', purchaseInvoices: 'Purchases',
+        promotions: 'Free issues', salesInvoices: 'Sales invoices', salesLines: 'Sales lines', salesReturns: 'Sales returns', salesReturnLines: 'Sales return lines', purchaseInvoices: 'Purchases',
         purchaseLines: 'Purchase lines', payments: 'Payments', stockAdjustments: 'Stock adjustments', invoiceImages: 'Invoice photos', assistantRequests: 'Assistant requests', settings: 'Settings',
       }
       const sheets: XSheet[] = Object.entries(titles).map(([key, title]) => {
@@ -58,9 +59,9 @@ export default function Settings() {
         const keys = rows.length ? Object.keys(rows[0]) : ['id']
         const cols: { header: string; get: (r: Record<string, unknown>) => XCell; type?: 'money' | 'int' }[] = []
         for (const k of keys) {
-          if (k === 'invoiceId' && key in invoiceNos) {
+          if ((k === 'invoiceId' || k === 'returnId') && key in invoiceNos) {
             const m = invoiceNos[key as keyof typeof invoiceNos]
-            cols.push({ header: 'Invoice no', get: (r) => m.get(r[k]) })
+            cols.push({ header: k === 'returnId' ? 'Return no' : 'Invoice no', get: (r) => m.get(r[k]) })
             continue
           }
           const sample = rows.find((r) => r[k] != null)?.[k]
@@ -87,6 +88,7 @@ export default function Settings() {
           <Field label="Email"><input className="input" type="email" value={form.email} onChange={(e) => set({ email: e.target.value })} /></Field>
           <Field label="Invoice prefix"><input className="input" value={form.invoicePrefix} onChange={(e) => set({ invoicePrefix: e.target.value })} /></Field>
           <Field label="Next invoice number" hint={`Next: ${form.invoicePrefix}${String(form.nextInvoiceNo).padStart(6, '0')}`}><NumberInput min={1} step={1} value={form.nextInvoiceNo} onChange={(v) => set({ nextInvoiceNo: Math.max(1, Math.round(v ?? 1)) })} /></Field>
+          <Field label="Next sales return number" hint={`Next: ${form.invoicePrefix}R${String(form.nextReturnNo).padStart(6, '0')}`}><NumberInput min={1} step={1} value={form.nextReturnNo} onChange={(v) => set({ nextReturnNo: Math.max(1, Math.round(v ?? 1)) })} /></Field>
           <Field label="Our customer code at the supplier" hint="Printed on purchase (GRN) copies"><input className="input" value={form.supplierCustomerCode} onChange={(e) => set({ supplierCustomerCode: e.target.value })} /></Field>
           <Field label="Invoice footer"><input className="input" value={form.footerNote} onChange={(e) => set({ footerNote: e.target.value })} /></Field>
           <label className="flex items-start gap-2 text-sm sm:col-span-2">

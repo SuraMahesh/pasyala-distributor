@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Eye, FileSpreadsheet, Paperclip, Pencil, Plus, Printer, ScanLine, Trash2, Wallet } from 'lucide-react'
+import { Eye, FileSpreadsheet, Paperclip, Pencil, Plus, Printer, ScanLine, Trash2, Undo2, Wallet } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { qtyFmt, rs, type SalesInvoice } from '@pjd/shared'
@@ -7,7 +7,7 @@ import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
 import InvoiceDocument from '../components/InvoiceDocument'
 import InvoiceImages from '../components/InvoiceImages'
-import InvoiceEditor, { blankLine, emptyDraft, type Draft } from '../components/InvoiceEditor'
+import InvoiceEditor, { blankLine, emptyDraft, payMethodLabel, type Draft } from '../components/InvoiceEditor'
 import { attachScanPhoto, ScanReview, ScanUpload, scanToDraft, type ScanState } from '../components/InvoiceScan'
 import PrintPreview from '../components/PrintPreview'
 import { Badge, ErrorBox, Filters, PageHeader, SearchBox, Spinner, Stat, StatusBadge } from '../components/ui'
@@ -22,6 +22,8 @@ interface SaleRow {
   invoiceNo: string
   date: string
   payMethod: string
+  chequeNo: string
+  chequeDate: string | null
   netTotal: number
   costTotal: number
   customerId: number
@@ -48,7 +50,7 @@ export function SalesList() {
     { key: 'date', header: 'Date', sortKey: 'date', render: (r) => <span className="text-stone-500">{r.date}</span> },
     { key: 'party', header: 'Customer', sortKey: 'party', render: (r) => <span>{r.partyName}<span className="ml-1.5 text-xs text-stone-400">{r.typeName}</span></span> },
     { key: 'area', header: 'Area', hideBelow: 'xl', render: (r) => <span className="text-stone-500">{r.area}</span>, mobile: false },
-    { key: 'method', header: 'Method', hideBelow: 'lg', render: (r) => <span className="text-stone-500">{r.payMethod}</span> },
+    { key: 'method', header: 'Method', hideBelow: 'lg', render: (r) => (r.payMethod === 'Cheque' && r.due > 0 ? <span className="text-amber-700" title={`Cheque ${r.chequeNo} not cleared yet`}>Cheque{r.chequeDate ? <span className="block text-xs">due {r.chequeDate}</span> : null}</span> : <span className="text-stone-500">{r.payMethod}</span>) },
     { key: 'net', header: 'Net total', sortKey: 'netTotal', align: 'right', render: (r) => <span className="font-medium">{rs(r.netTotal)}</span> },
     { key: 'due', header: 'Due', sortKey: 'due', align: 'right', render: (r) => (r.due > 0 ? rs(r.due) : <span className="text-stone-300">—</span>) },
     { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} overdue={r.overdue} /> },
@@ -61,9 +63,9 @@ export function SalesList() {
       columns: [
         { header: 'Invoice' }, { header: 'Date', type: 'date' }, { header: 'Customer' }, { header: 'Customer type' }, { header: 'Area' },
         { header: 'Method' }, { header: 'Net total', type: 'money' }, { header: 'Cost', type: 'money' }, { header: 'Profit', type: 'money' },
-        { header: 'Paid', type: 'money' }, { header: 'Due', type: 'money' }, { header: 'Status' }, { header: 'Due date', type: 'date' },
+        { header: 'Paid', type: 'money' }, { header: 'Due', type: 'money' }, { header: 'Status' }, { header: 'Due date', type: 'date' }, { header: 'Cheque no' }, { header: 'Cheque date', type: 'date' },
       ],
-      rows: all.map((r) => [r.invoiceNo, r.date, r.partyName, r.typeName, r.area, r.payMethod, r.netTotal, r.costTotal, r.netTotal - r.costTotal, r.paid, r.due, r.overdue ? 'Overdue' : r.status === 'paid' ? 'Paid' : r.status === 'partial' ? 'Part paid' : 'Unpaid', r.dueDate]),
+      rows: all.map((r) => [r.invoiceNo, r.date, r.partyName, r.typeName, r.area, r.payMethod, r.netTotal, r.costTotal, r.netTotal - r.costTotal, r.paid, r.due, r.overdue ? 'Overdue' : r.status === 'paid' ? 'Paid' : r.status === 'partial' ? 'Part paid' : 'Unpaid', r.dueDate, r.chequeNo, r.chequeDate]),
       totals: [6, 7, 8, 9, 10],
     }])
   }
@@ -77,6 +79,7 @@ export function SalesList() {
         actions={
           <>
             <button className="btn-secondary" onClick={exportExcel}><FileSpreadsheet size={16} /> Excel</button>
+            <Link to="/sales/returns" className="btn-secondary"><Undo2 size={16} /> Returns</Link>
             <Link to="/sales/new" className="btn-secondary"><ScanLine size={16} /> Scan invoice image</Link>
             <Link to="/sales/new" className="btn-primary"><Plus size={16} /> New sale</Link>
           </>
@@ -99,6 +102,7 @@ export function SalesList() {
           <option value="">All statuses</option>
           <option value="due">Unpaid / part paid</option>
           <option value="overdue">Overdue</option>
+          <option value="cheque">Cheque not cleared</option>
           <option value="paid">Paid</option>
         </select>
         <select className="input" value={s.typeId} onChange={(e) => set({ typeId: e.target.value })}>
@@ -161,8 +165,11 @@ function toDraft(inv: SalesInvoice): Draft {
     payMethod: inv.payMethod,
     billDiscPct: inv.billDiscPct,
     paidOnInvoice: inv.paidOnInvoice,
-    paidTouched: Math.abs(inv.paidOnInvoice - inv.netTotal) > 0.004, // fully paid cash invoices keep following the total
+    paidTouched: Math.abs(inv.paidOnInvoice - inv.netTotal) > 0.004 && !(inv.payMethod === 'Cheque' && inv.paidOnInvoice === 0), // fully paid cash invoices keep following the total
     notes: inv.notes,
+    chequeNo: inv.chequeNo,
+    chequeDate: inv.chequeDate ?? '',
+    chequePaid: inv.payMethod === 'Cheque' && inv.paidOnInvoice + 0.004 >= inv.netTotal,
     lines: inv.lines.map((l) => ({ ...blankLine(), productId: l.productId, qty: l.qty, freeQty: l.freeQty, unitPrice: l.unitPrice, discPct: l.discPct, manualPrice: true, manualFree: true, priceNote: 'Saved price' })),
   }
 }
@@ -213,7 +220,7 @@ export function SaleEdit() {
         invoiceNoPreview={invoiceNo}
         onSubmit={(d, paid) =>
           save.mutateAsync({
-            body: { customerId: d.partyId, date: d.date, payMethod: d.payMethod, billDiscPct: d.billDiscPct, paidOnInvoice: paid, notes: d.notes, lines: d.lines.map(({ productId, qty, freeQty, unitPrice, discPct }) => ({ productId, qty, freeQty, unitPrice, discPct })) },
+            body: { customerId: d.partyId, date: d.date, payMethod: d.payMethod, billDiscPct: d.billDiscPct, paidOnInvoice: paid, notes: d.notes, chequeNo: d.chequeNo, chequeDate: d.payMethod === 'Cheque' && d.chequeDate ? d.chequeDate : null, lines: d.lines.map(({ productId, qty, freeQty, unitPrice, discPct }) => ({ productId, qty, freeQty, unitPrice, discPct })) },
           })
         }
         renderPreview={(d, paid) => {
@@ -242,7 +249,7 @@ function PreviewDoc({ invoiceNo, d, paid, party }: { invoiceNo: string; d: Draft
       issuer={settings ?? { name: '' }}
       party={party}
       partyLabel="Customer"
-      meta={[['Invoice No', invoiceNo], ['Invoice Date', d.date], ['Pay. Method', d.payMethod], ['Notes', d.notes]]}
+      meta={[['Invoice No', invoiceNo], ['Invoice Date', d.date], ['Pay. Method', payMethodLabel(d.payMethod, d.chequeNo, d.chequeDate)], ['Notes', d.notes]]}
       lines={d.lines.map((l) => ({ ...l, productId: l.productId!, ...pmap.get(l.productId!) }))}
       billDiscPct={d.billDiscPct}
       paidAmount={paid}
@@ -261,6 +268,12 @@ export function SaleView() {
   const [preview, setPreview] = useState(false)
   const [paying, setPaying] = useState(false)
   const del = useApiMutation(() => api.del(`/sales/${id}`), { success: 'Invoice deleted — stock returned', onSuccess: () => nav('/sales', { replace: true }) })
+  const cleared = useApiMutation(() => api.post(`/sales/${id}/cheque-cleared`, {}), { success: 'Cheque cleared — invoice marked paid' })
+  const markCleared = async () => {
+    const inv = q.data!
+    if (await confirm({ title: 'Cheque cleared?', message: `${inv.invoiceNo} will be marked paid in full (Rs ${rs(inv.netTotal)}) by cheque${inv.chequeNo ? ` ${inv.chequeNo}` : ''}.`, confirmText: 'Mark paid' })) cleared.mutate(undefined)
+  }
+  const returned = q.data?.returns.reduce((s, r) => s + r.netTotal, 0) ?? 0
 
   const inv = q.data
   const cust = customers.find((c) => c.id === inv?.customerId)
@@ -272,7 +285,7 @@ export function SaleView() {
           issuer={settings ?? { name: '' }}
           party={{ code: cust?.code, name: inv.customerName, type: inv.customerTypeName, address: cust?.area }}
           partyLabel="Customer"
-          meta={[['Invoice No', inv.invoiceNo], ['Invoice Date', inv.date], ['Pay. Method', inv.payMethod], ['Due Date', inv.due > 0.004 ? inv.dueDate : ''], ['Notes', inv.notes]]}
+          meta={[['Invoice No', inv.invoiceNo], ['Invoice Date', inv.date], ['Pay. Method', payMethodLabel(inv.payMethod, inv.chequeNo, inv.chequeDate)], ['Due Date', inv.due > 0.004 ? inv.dueDate : ''], ['Notes', inv.notes]]}
           lines={inv.lines}
           billDiscPct={inv.billDiscPct}
           paidAmount={inv.paid}
@@ -303,7 +316,9 @@ export function SaleView() {
               <Trash2 size={15} /> Delete
             </button>
             <Link to={`/sales/${inv.id}/edit`} className="btn-secondary"><Pencil size={15} /> Edit</Link>
-            {inv.due > 0 && <button className="btn-secondary" onClick={() => setPaying(true)}><Wallet size={15} /> Receive</button>}
+            <Link to={`/sales/returns/new?invoice=${inv.id}`} className="btn-secondary" title="Record goods this customer sent back from this invoice"><Undo2 size={15} /> Return items</Link>
+            {inv.due > 0 && inv.payMethod === 'Cheque' && <button className="btn-secondary" onClick={markCleared} disabled={cleared.isPending}><Wallet size={15} /> Cheque cleared</button>}
+            {inv.due > 0 && inv.payMethod !== 'Cheque' && <button className="btn-secondary" onClick={() => setPaying(true)}><Wallet size={15} /> Receive</button>}
             <button className="btn-secondary hidden sm:inline-flex" onClick={() => quickPrint(`${inv.invoiceNo}`)}><Printer size={15} /> Quick print</button>
             <button className="btn-primary" onClick={() => setPreview(true)}><Eye size={15} /> Print preview</button>
           </>
@@ -311,11 +326,30 @@ export function SaleView() {
       />
       <div className="no-print mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Net total" value={`Rs ${rs(inv.netTotal)}`} />
-        <Stat label="Paid" value={`Rs ${rs(inv.paid)}`} hint={inv.paidOnInvoice ? `Rs ${rs(inv.paidOnInvoice)} on invoice` : undefined} tone="good" />
+        <Stat label="Paid" value={`Rs ${rs(inv.paid)}`} hint={[inv.paidOnInvoice ? `Rs ${rs(inv.paidOnInvoice)} on invoice` : '', inv.credited ? `Rs ${rs(inv.credited)} by returns` : ''].filter(Boolean).join(' · ') || undefined} tone="good" />
         <Stat label="Due" value={`Rs ${rs(inv.due)}`} hint={inv.due > 0 ? `by ${inv.dueDate}` : undefined} tone={inv.overdue ? 'bad' : inv.due > 0 ? 'warn' : 'default'} />
         <Stat label="Gross profit" value={`Rs ${rs(profit)}`} hint={inv.netTotal ? `${((profit / inv.netTotal) * 100).toFixed(1)}% · cost Rs ${rs(inv.costTotal)}` : undefined} tone={profit < 0 ? 'bad' : 'good'} />
       </div>
       {inv.customerTypeName && <p className="no-print mb-3 text-sm text-stone-500">Customer type: <Badge tone="blue">{inv.customerTypeName}</Badge></p>}
+      {inv.payMethod === 'Cheque' && (
+        <p className={`no-print mb-3 flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm ${inv.due > 0 ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-brand-200 bg-brand-50 text-brand-800'}`}>
+          <Wallet size={16} />
+          {inv.due > 0 ? (
+            <>Cheque{inv.chequeNo ? ` ${inv.chequeNo}` : ''}{inv.chequeDate ? ` dated ${inv.chequeDate}` : ''} is not paid yet — the invoice falls due on {inv.chequeDate ?? inv.dueDate}.
+              <button className="font-medium underline" onClick={markCleared}>Mark the cheque cleared</button>
+              {!inv.chequeDate && <Link className="font-medium underline" to={`/sales/${inv.id}/edit`}>Add the cheque date</Link>}</>
+          ) : (
+            <>Paid by cheque{inv.chequeNo ? ` ${inv.chequeNo}` : ''}{inv.chequeDate ? ` dated ${inv.chequeDate}` : ''}.</>
+          )}
+        </p>
+      )}
+      {inv.returns.length > 0 && (
+        <p className="no-print mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <Undo2 size={16} /> Goods worth Rs {rs(returned)} came back on
+          {inv.returns.map((r) => <Link key={r.id} to={`/sales/returns/${r.id}`} className="font-medium underline">{r.returnNo}</Link>)}
+          <span className="text-xs">— this invoice cannot be deleted while those returns exist.</span>
+        </p>
+      )}
       <InvoiceImages kind="sale" invoiceId={inv.id} invoiceNo={inv.invoiceNo} partyName={inv.customerName} />
       {doc}
       <PrintPreview open={preview} onClose={() => setPreview(false)} title={inv.invoiceNo}>{doc}</PrintPreview>

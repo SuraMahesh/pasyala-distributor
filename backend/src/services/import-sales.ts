@@ -56,6 +56,9 @@ export interface SalesImportInvoice {
   billDiscPct: number
   /** amount paid when the bill was handed over; 'full' = the net total */
   paid?: number | 'full'
+  /** cheque details when payMethod is Cheque; a cheque not paid yet (paid 0) falls due on chequeDate */
+  chequeNo?: string
+  chequeDate?: string
   /** totals written on the bill — the lines must reproduce them (the net may be rounded to the rupee by hand) */
   written?: { gross?: number; netTotal?: number }
   /** kept in the invoice notes after the bill number */
@@ -337,6 +340,8 @@ export async function importSales(db: DB, file: SalesImportFile, opts: SalesImpo
       payMethod: r.inv.payMethod ?? file.payMethod ?? 'Credit',
       billDiscPct: r.inv.billDiscPct,
       paidOnInvoice: r.row.paidOnInvoice,
+      chequeNo: r.inv.chequeNo ?? '',
+      chequeDate: r.inv.chequeDate ?? null,
       notes: [`${billTag(r.row.billNo)} (Pasyale bill book)`, (r.inv.note ?? '').trim()].filter(Boolean).join('. ').slice(0, 300),
       lines: r.lines,
     })

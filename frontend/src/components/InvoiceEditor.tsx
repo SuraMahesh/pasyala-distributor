@@ -46,8 +46,16 @@ export interface Draft {
   invoiceNo: string
   orderNo: string
   salesPerson: string
+  /** cheque details (payment method Cheque): a cheque that is not paid yet falls due on its date */
+  chequeNo: string
+  chequeDate: string
+  chequePaid: boolean
   lines: DraftLine[]
 }
+
+/** "Cheque No 123 dated 2026-11-20" for print-outs; other methods unchanged */
+export const payMethodLabel = (method: string, chequeNo?: string, chequeDate?: string | null) =>
+  method === 'Cheque' ? `Cheque${chequeNo ? ` No ${chequeNo}` : ''}${chequeDate ? ` dated ${chequeDate}` : ''}` : method
 
 let seq = 0
 const newKey = () => `l${++seq}-${Date.now()}`
@@ -65,6 +73,9 @@ export function emptyDraft(mode: 'sale' | 'purchase'): Draft {
     invoiceNo: '',
     orderNo: '',
     salesPerson: '',
+    chequeNo: '',
+    chequeDate: '',
+    chequePaid: false,
     lines: [blankLine()],
   }
 }
@@ -153,7 +164,9 @@ export default function InvoiceEditor({
 
   const validLines = d.lines.filter((l) => l.productId)
   const t = invoiceTotals(validLines, d.billDiscPct)
-  const paid = d.paidTouched ? d.paidOnInvoice : d.payMethod === 'Credit' ? 0 : t.netTotal
+  // a cheque counts as paid only once it is marked cleared; until then the invoice stays due (on the cheque date)
+  const chequePending = d.payMethod === 'Cheque' && !d.chequePaid
+  const paid = d.paidTouched ? d.paidOnInvoice : d.payMethod === 'Credit' || chequePending ? 0 : t.netTotal
 
   // stock check (sales)
   const requested = new Map<number, number>()
@@ -206,6 +219,7 @@ export default function InvoiceEditor({
     if (mode === 'purchase' && !d.invoiceNo.trim()) e.invoiceNo = 'Enter the supplier invoice number'
     if (!validLines.length) e.lines = 'Add at least one item'
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) e.date = 'Enter the invoice date'
+    if (chequePending && !/^\d{4}-\d{2}-\d{2}$/.test(d.chequeDate)) e.chequeDate = 'Enter the cheque date — the money falls due on that day'
     d.lines.forEach((l, i) => {
       if (!l.productId && l.imageText) e[`line${l.key}`] = `Line ${i + 1}: choose the product for "${l.imageText}" or delete the line`
       if (l.productId && l.qty + l.freeQty <= 0) e[`line${l.key}`] = `Line ${i + 1}: qty must be more than 0`
@@ -232,7 +246,8 @@ export default function InvoiceEditor({
       ...(belowCost.length ? [`${belowCost.length} item(s) priced below cost.`] : []),
       ...(totalOff ? [`Lines add up to Rs ${rs(t.netTotal)} but the image shows Rs ${rs(printedTotal!)}.`] : []),
       ...(numberOff ? [`The photo reads invoice ${imageInvoiceNo}, but you entered ${d.invoiceNo}. The photo will be attached to ${d.invoiceNo} — make sure it is the same paper.`] : []),
-      ...(d.payMethod !== 'Credit' && paid + 0.004 < t.netTotal ? [`Paid now (Rs ${rs(paid)}) is less than the net total — the invoice will be saved as part paid.`] : []),
+      ...(d.payMethod !== 'Credit' && !chequePending && paid + 0.004 < t.netTotal ? [`Paid now (Rs ${rs(paid)}) is less than the net total — the invoice will be saved as part paid.`] : []),
+      ...(chequePending ? [`Cheque${d.chequeNo ? ` ${d.chequeNo}` : ''} dated ${d.chequeDate} is not paid yet — the invoice stays due until you mark the cheque cleared.`] : []),
     ]
     const ok = await confirm({
       title: isEditing ? 'Save changes to this invoice?' : scanned ? 'Save invoice read from image?'  : mode === 'sale' ? 'Create this sales invoice?' : 'Save this supplier invoice?',
@@ -243,7 +258,7 @@ export default function InvoiceEditor({
           <dt className="text-stone-500">{mode === 'sale' ? 'Customer' : 'Supplier'}</dt><dd className="font-medium">{partyName}</dd>
           <dt className="text-stone-500">Items</dt><dd>{validLines.length} lines · {qtyFmt(t.units)} units{t.freeUnits ? ` + ${qtyFmt(t.freeUnits)} free` : ''}</dd>
           <dt className="text-stone-500">Net total</dt><dd className="font-semibold">Rs {rs(t.netTotal)}</dd>
-          <dt className="text-stone-500">Paid now</dt><dd>Rs {rs(paid)} ({d.payMethod})</dd>
+          <dt className="text-stone-500">Paid now</dt><dd>Rs {rs(paid)} ({d.payMethod}{d.payMethod === 'Cheque' ? (d.chequePaid ? ', cleared' : `, dated ${d.chequeDate}, not yet paid`) : ''})</dd>
           <dt className="text-stone-500">Balance</dt><dd>Rs {rs(t.netTotal - paid)}</dd>
         </dl>
       ),
@@ -305,10 +320,32 @@ export default function InvoiceEditor({
           <input data-error={!!errors.date} type="date" className="input" value={d.date} onChange={(e) => setDate(e.target.value)} />
         </Field>
         <Field label="Payment method">
-          <select className="input" value={d.payMethod} onChange={(e) => set({ payMethod: e.target.value as PayMethod })}>
+          <select className="input" value={d.payMethod} onChange={(e) => set({ payMethod: e.target.value as PayMethod, paidTouched: false })}>
             {PAY_METHODS.map((m) => <option key={m}>{m}</option>)}
           </select>
         </Field>
+        {d.payMethod === 'Cheque' && (
+          <div className="grid gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 sm:col-span-2 sm:grid-cols-3 lg:col-span-4 lg:grid-cols-4">
+            <Field label="Cheque no">
+              <input className="input" value={d.chequeNo} onChange={(e) => set({ chequeNo: e.target.value })} placeholder="Number on the cheque" />
+            </Field>
+            <Field label="Cheque" className="sm:col-span-2">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className={`flex cursor-pointer items-start gap-2 rounded-lg border bg-white p-2.5 text-sm ${!d.chequePaid ? 'border-amber-400' : 'border-stone-200'}`}>
+                  <input type="radio" className="mt-0.5 accent-brand-700" checked={!d.chequePaid} onChange={() => set({ chequePaid: false, paidTouched: false })} />
+                  <span>Not yet paid <span className="block text-xs text-stone-500">Post-dated or not banked — the invoice stays due until the cheque clears</span></span>
+                </label>
+                <label className={`flex cursor-pointer items-start gap-2 rounded-lg border bg-white p-2.5 text-sm ${d.chequePaid ? 'border-brand-400' : 'border-stone-200'}`}>
+                  <input type="radio" className="mt-0.5 accent-brand-700" checked={d.chequePaid} onChange={() => set({ chequePaid: true, paidTouched: false })} />
+                  <span>Paid <span className="block text-xs text-stone-500">The cheque was banked and cleared</span></span>
+                </label>
+              </div>
+            </Field>
+            <Field label={chequePending ? 'Cheque date *' : 'Cheque date'} error={errors.chequeDate} hint={chequePending ? 'The invoice falls due on this date' : undefined}>
+              <input data-error={!!errors.chequeDate} type="date" className="input" value={d.chequeDate} onChange={(e) => { set({ chequeDate: e.target.value }); setErrors((x) => ({ ...x, chequeDate: '' })) }} />
+            </Field>
+          </div>
+        )}
         {mode === 'purchase' ? (
           <>
             <Field label="Supplier invoice no *" error={errors.invoiceNo}>

@@ -15,6 +15,9 @@ export type Category = (typeof CATEGORIES)[number]
 export const PAY_METHODS = ['Cash', 'Credit', 'Cheque', 'Bank Transfer'] as const
 export type PayMethod = (typeof PAY_METHODS)[number]
 
+export const RETURN_REASONS = ['Damaged', 'Expired', 'Wrong item', 'Unsold stock', 'Other'] as const
+export type ReturnReason = (typeof RETURN_REASONS)[number]
+
 export const ADJ_REASONS = ['Count correction', 'Damage', 'Expired', 'Return', 'Sample', 'Other'] as const
 export type AdjReason = (typeof ADJ_REASONS)[number]
 
@@ -32,6 +35,8 @@ export interface Settings {
   email: string
   invoicePrefix: string
   nextInvoiceNo: number
+  /** sales returns are numbered <prefix>R000001, R000002 … */
+  nextReturnNo: number
   footerNote: string
   supplierCustomerCode: string
   allowNegativeStock: boolean
@@ -66,6 +71,8 @@ export interface ProductStock {
   purchased: number
   sold: number
   adjusted: number
+  /** units customers sent back that went back on the shelf (returns marked "write off" are not counted) */
+  returned: number
   onHand: number
   avgCost: number
   /** free units received from the supplier (unit price 0) */
@@ -152,6 +159,8 @@ export interface Customer {
 export interface PartyBalance {
   billed: number
   paid: number
+  /** sales returns credited to the customer (net of cash refunds); always 0 for suppliers */
+  returned: number
   balance: number
   invoices: number
   overdue: number
@@ -205,8 +214,14 @@ export interface InvoiceHeader {
   billDiscount: number
   netTotal: number
   notes: string
+  /** cheque number when paid by cheque */
+  chequeNo: string
+  /** date on the cheque — a cheque that is not paid yet falls due on this date */
+  chequeDate: string | null
   // derived
   paid: number
+  /** part of `paid` that came from sales returns recorded against this invoice (always 0 for purchases) */
+  credited: number
   due: number
   status: InvoiceStatus
   dueDate: string
@@ -218,6 +233,46 @@ export interface SalesInvoice extends InvoiceHeader {
   customerName: string
   customerTypeName: string
   costTotal: number
+  lines: InvoiceLine[]
+  /** sales returns recorded against this invoice */
+  returns: SalesReturnRef[]
+}
+
+export interface SalesReturnRef {
+  id: number
+  returnNo: string
+  date: string
+  netTotal: number
+  restock: boolean
+}
+
+/** Goods a customer sent back (credit note). Stock comes back unless written off; the net total comes off the customer's balance, less any cash refunded. */
+export interface SalesReturn {
+  id: number
+  returnNo: string
+  date: string
+  customerId: number
+  customerName: string
+  customerTypeName: string
+  /** the invoice the goods were sold on, when known */
+  salesInvoiceId: number | null
+  invoiceNo: string | null
+  reason: ReturnReason
+  /** true = back on the shelf; false = damaged / expired, written off (stock unchanged) */
+  restock: boolean
+  billDiscPct: number
+  gross: number
+  lineDiscount: number
+  subTotal: number
+  billDiscount: number
+  netTotal: number
+  costTotal: number
+  /** cash handed back to the customer */
+  refunded: number
+  refundMethod: PayMethod | ''
+  /** netTotal − refunded: what came off the customer's balance */
+  credited: number
+  notes: string
   lines: InvoiceLine[]
 }
 
@@ -253,7 +308,7 @@ export interface StockAdjustment {
 
 export interface Movement {
   date: string
-  type: 'Opening' | 'Purchase' | 'Sale' | 'Adjustment'
+  type: 'Opening' | 'Purchase' | 'Sale' | 'Return' | 'Adjustment'
   ref: string
   refId: number | null
   party: string
@@ -264,7 +319,7 @@ export interface Movement {
 
 export interface StatementRow {
   date: string
-  type: 'Invoice' | 'Paid on invoice' | 'Payment'
+  type: 'Invoice' | 'Paid on invoice' | 'Payment' | 'Return' | 'Refund'
   ref: string
   refId: number | null
   debit: number

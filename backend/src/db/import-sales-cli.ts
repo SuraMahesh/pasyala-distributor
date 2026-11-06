@@ -55,7 +55,7 @@ function print(r: SalesImportReport) {
   console.log(`\nCustomers (${r.customers.length}):`)
   for (const c of r.customers) {
     const state =
-      c.status === 'new' ? (r.apply ? `created #${c.id}` : 'NEW — will be created') : c.status === 'existing' ? `exists (#${c.id})` : `matched by name to ${c.existingCode} "${c.existingName}" (#${c.id})`
+      c.status === 'new' ? (r.apply ? (c.id ? `created #${c.id}` : 'NOT created — its bill was skipped') : 'NEW — will be created') : c.status === 'existing' ? `exists (#${c.id})` : `matched by name to ${c.existingCode} "${c.existingName}" (#${c.id})`
     console.log(`  ${pad(c.code, 16)} ${pad(c.name, 32)} ${pad(c.typeCode, 10)} ${state}`)
   }
 

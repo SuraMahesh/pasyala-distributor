@@ -222,6 +222,195 @@ describe('payments, balances and overdue', () => {
   })
 })
 
+describe('sales returns (credit notes)', () => {
+  const line = (code: string, qty: number, freeQty = 0, unitPrice = 200, discPct = 10) => ({ productId: ids[code], qty, freeQty, unitPrice, discPct })
+  const ret = (patch: Record<string, unknown>) => ({ date: today, customerId: ids.mc, salesInvoiceId: ids.retSale, reason: 'Unsold stock', restock: true, billDiscPct: 5, refunded: 0, refundMethod: '', notes: '', ...patch })
+
+  it('takes goods back against an invoice: stock returns, the invoice is credited, numbered PJD-R000001', async () => {
+    const before = (await product('ATCS0030')).onHand
+    const sale = await api.post('/api/sales').send({ date: today, customerId: ids.mc, payMethod: 'Credit', billDiscPct: 5, paidOnInvoice: 0, notes: '', lines: [line('ATCS0030', 20, 2), line('ATGL0030', 6, 0, 280, 0)] })
+    expect(sale.status).toBe(201)
+    ids.retSale = sale.body.id
+    expect((await product('ATCS0030')).onHand).toBe(before - 22)
+    const balBefore = (await api.get(`/api/customers/${ids.mc}`)).body.customer.balance
+
+    const res = await api.post('/api/sales-returns').send(ret({ notes: 'back from the shelf', lines: [line('ATCS0030', 4, 1)] }))
+    expect(res.status).toBe(201)
+    expect(res.body.invoiceNo).toBe('PJD-R000001')
+    ids.ret1 = res.body.id
+    const r = (await api.get(`/api/sales-returns/${ids.ret1}`)).body
+    // 4 × 200 × 0.9 = 720, less 5% bill discount = 684; the free unit is worth 0
+    expect(r).toMatchObject({ returnNo: 'PJD-R000001', netTotal: 684, credited: 684, refunded: 0, restock: true, invoiceNo: sale.body.invoiceNo, customerName: 'Siddhi Ayurveda Clinic', notes: 'back from the shelf' })
+    expect(r.lines[0]).toMatchObject({ code: 'ATCS0030', qty: 4, freeQty: 1, lineNet: 720 })
+    expect(r.lines[0].unitCost).toBeGreaterThan(0)
+    expect(r.costTotal).toBeCloseTo(r.lines[0].unitCost * 5, 2)
+    expect((await product('ATCS0030')).onHand).toBe(before - 22 + 5)
+
+    const inv = (await api.get(`/api/sales/${ids.retSale}`)).body
+    expect(inv.credited).toBe(684)
+    expect(inv.paid).toBe(684)
+    expect(inv.due).toBeCloseTo(inv.netTotal - 684, 2)
+    expect(inv.status).toBe('partial')
+    expect(inv.returns).toEqual([expect.objectContaining({ id: ids.ret1, returnNo: 'PJD-R000001', netTotal: 684, restock: true })])
+
+    const c = (await api.get(`/api/customers/${ids.mc}`)).body
+    expect(c.customer.balance).toBeCloseTo(balBefore - 684, 2)
+    expect(c.customer.returned).toBe(684)
+    expect(c.statement.find((s: { type: string }) => s.type === 'Return')).toMatchObject({ ref: 'PJD-R000001', refId: ids.ret1, credit: 684, debit: 0 })
+    expect(c.statement.at(-1).balance).toBeCloseTo(c.customer.balance, 2)
+    const moves = (await api.get(`/api/products/${ids.ATCS0030}/movements`)).body.items
+    expect(moves[0]).toMatchObject({ type: 'Return', ref: 'PJD-R000001', refId: ids.ret1, qtyIn: 5, qtyOut: 0, party: 'Siddhi Ayurveda Clinic' })
+  })
+
+  it('never takes back more than the invoice sold, only items on it, only from its customer', async () => {
+    const tooMany = await api.post('/api/sales-returns').send(ret({ lines: [line('ATCS0030', 18)] })) // 22 sold, 5 already back → at most 17
+    expect(tooMany.status).toBe(400)
+    expect(tooMany.body.error).toMatch(/30ML CASTOR OIL: PJD-\d+ sold 22 and 5 already came back — cannot take back 18/)
+    const notOnInvoice = await api.post('/api/sales-returns').send(ret({ lines: [line('THMN0030', 1)] }))
+    expect(notOnInvoice.status).toBe(400)
+    expect(notOnInvoice.body.error).toMatch(/30ML MAHA NARAYANA is not on PJD-/)
+    const wrongCustomer = await api.post('/api/sales-returns').send(ret({ customerId: ids.shop, lines: [line('ATCS0030', 1)] }))
+    expect(wrongCustomer.status).toBe(400)
+    expect(wrongCustomer.body.error).toMatch(/was sold to Siddhi Ayurveda Clinic, not to Sunil Stores/)
+    const refundTooBig = await api.post('/api/sales-returns').send(ret({ refunded: 999999, refundMethod: 'Cash', lines: [line('ATCS0030', 1)] }))
+    expect(refundTooBig.status).toBe(400)
+    expect(refundTooBig.body.error).toMatch(/more than the return total/)
+    const noMethod = await api.post('/api/sales-returns').send(ret({ refunded: 10, lines: [line('ATCS0030', 1)] }))
+    expect(noMethod.status).toBe(400)
+    expect(noMethod.body.error).toMatch(/how the money was refunded/)
+    expect((await api.get('/api/settings')).body.nextReturnNo).toBe(2) // none of the refused returns used a number
+  })
+
+  it('the invoice cannot be deleted, or cut below what came back, while the return exists', async () => {
+    const del = await api.delete(`/api/sales/${ids.retSale}`)
+    expect(del.status).toBe(409)
+    expect(del.body.error).toMatch(/sales return PJD-R000001 was recorded against it/)
+    const header = { date: today, customerId: ids.mc, payMethod: 'Credit', billDiscPct: 5, paidOnInvoice: 0, notes: '' }
+    const edit = await api.put(`/api/sales/${ids.retSale}`).send({ ...header, lines: [line('ATCS0030', 3, 0), line('ATGL0030', 6, 0, 280, 0)] })
+    expect(edit.status).toBe(400)
+    expect(edit.body.error).toMatch(/30ML CASTOR OIL: 5 already came back on a sales return/)
+    const ok = await api.put(`/api/sales/${ids.retSale}`).send({ ...header, lines: [line('ATCS0030', 20, 2), line('ATGL0030', 6, 0, 280, 0)] })
+    expect(ok.status).toBe(200)
+  })
+
+  it('a write-off leaves stock alone; a cash refund does not come off the balance', async () => {
+    const before = (await product('ATGL0030')).onHand
+    const bal = (await api.get(`/api/customers/${ids.mc}`)).body.customer.balance
+    const res = await api.post('/api/sales-returns').send(ret({ salesInvoiceId: null, reason: 'Damaged', restock: false, billDiscPct: 0, refunded: 280, refundMethod: 'Cash', lines: [line('ATGL0030', 2, 0, 280, 0)] }))
+    expect(res.status).toBe(201)
+    expect(res.body.invoiceNo).toBe('PJD-R000002')
+    ids.ret2 = res.body.id
+    expect((await product('ATGL0030')).onHand).toBe(before) // written off: nothing goes back on the shelf
+    const r = (await api.get(`/api/sales-returns/${ids.ret2}`)).body
+    expect(r).toMatchObject({ netTotal: 560, refunded: 280, credited: 280, refundMethod: 'Cash', restock: false, invoiceNo: null, reason: 'Damaged' })
+    const c = (await api.get(`/api/customers/${ids.mc}`)).body
+    expect(c.customer.balance).toBeCloseTo(bal - 280, 2)
+    expect(c.statement.filter((s: { ref: string }) => s.ref === 'PJD-R000002').map((s: { type: string; debit: number; credit: number }) => [s.type, s.debit, s.credit])).toEqual([['Return', 0, 560], ['Refund', 280, 0]])
+    const moves = (await api.get(`/api/products/${ids.ATGL0030}/movements`)).body.items
+    expect(moves.some((m: { type: string }) => m.type === 'Return')).toBe(false)
+  })
+
+  it('the list, the sales reports and the dashboard are all net of returns', async () => {
+    const list = (await api.get('/api/sales-returns?pageSize=50')).body
+    expect(list.total).toBe(2)
+    expect(list.summary).toMatchObject({ count: 2, netTotal: 1244, refunded: 280, credited: 964, units: 7 })
+    expect(list.items.find((i: { returnNo: string }) => i.returnNo === 'PJD-R000002')).toMatchObject({ restock: false, invoiceNo: null, credited: 280, partyName: 'Siddhi Ayurveda Clinic', lineCount: 1, units: 2 })
+    expect((await api.get('/api/sales-returns?restock=no')).body.total).toBe(1)
+    expect((await api.get(`/api/sales-returns?salesInvoiceId=${ids.retSale}`)).body.total).toBe(1)
+    expect((await api.get('/api/sales-returns?search=R000002')).body.total).toBe(1)
+
+    const from = addDays(today, -90)
+    const sales = (await api.get('/api/sales?pageSize=200')).body
+    const s = (await api.get(`/api/reports/summary?from=${from}&to=${today}`)).body
+    expect(s).toMatchObject({ returns: 2, returned: 1244, refunded: 280 })
+    expect(s.grossRevenue).toBeCloseTo(sales.summary.netTotal, 2)
+    expect(s.revenue).toBeCloseTo(sales.summary.netTotal - 1244, 2)
+    expect(s.profit).toBeCloseTo(s.revenue - s.cost, 2)
+    const byProduct = (await api.get(`/api/reports/by-product?from=${from}&to=${today}`)).body
+    expect(byProduct.find((p: { code: string }) => p.code === 'ATGL0030')).toMatchObject({ qty: 4, free: 0, invoices: 1 }) // 6 sold, 2 back
+    expect(byProduct.find((p: { code: string }) => p.code === 'ATCS0030')).toMatchObject({ qty: 16, free: 1 }) // 20 + 2 free sold, 4 + 1 free back
+    const byCustomer = (await api.get(`/api/reports/by-customer?from=${from}&to=${today}`)).body
+    expect(byCustomer.reduce((a: number, c: { revenue: number }) => a + c.revenue, 0)).toBeCloseTo(s.revenue, 2)
+    const byType = (await api.get(`/api/reports/by-type?from=${from}&to=${today}`)).body
+    expect(byType.reduce((a: number, t: { revenue: number }) => a + t.revenue, 0)).toBeCloseTo(s.revenue, 2)
+    const todaySales = (await api.get(`/api/sales?from=${today}&to=${today}&pageSize=200`)).body
+    const daily = (await api.get(`/api/reports/daily?from=${today}&to=${today}`)).body
+    expect(daily[0].revenue).toBeCloseTo(todaySales.summary.netTotal - 1244, 2)
+    expect(daily[0].invoices).toBe(todaySales.total)
+    const d = (await api.get('/api/dashboard')).body
+    expect(d.today.revenue).toBeCloseTo(todaySales.summary.netTotal - 1244, 2)
+    expect(d.month.returned).toBe(1244)
+  })
+
+  it('editing a return re-checks stock; deleting one puts the goods back out — refused once they were sold on', async () => {
+    const onHand = (await product('ATCS0030')).onHand
+    const edit = await api.put(`/api/sales-returns/${ids.ret1}`).send(ret({ lines: [line('ATCS0030', 6, 0)] }))
+    expect(edit.status).toBe(200)
+    expect(edit.body.invoiceNo).toBe('PJD-R000001')
+    expect((await product('ATCS0030')).onHand).toBe(onHand + 1) // 6 back instead of 4 + 1 free
+    expect((await api.get(`/api/sales-returns/${ids.ret1}`)).body.netTotal).toBe(1026) // 6 × 200 × 0.9 × 0.95
+
+    // sell every unit, then the returned goods cannot leave again
+    const all = (await product('ATCS0030')).onHand
+    const sellAll = await api.post('/api/sales').send({ date: today, customerId: ids.shop, payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [line('ATCS0030', all, 0, 200, 0)] })
+    expect(sellAll.status).toBe(201)
+    const del = await api.delete(`/api/sales-returns/${ids.ret1}`)
+    expect(del.status).toBe(409)
+    expect(del.body.error).toMatch(/Cannot delete PJD-R000001 — those goods were already sold or used/)
+    expect((await api.delete(`/api/sales/${sellAll.body.id}`)).status).toBe(200)
+
+    expect((await api.delete(`/api/sales-returns/${ids.ret1}`)).status).toBe(200)
+    expect((await product('ATCS0030')).onHand).toBe(all - 6)
+    expect((await api.get(`/api/sales-returns/${ids.ret1}`)).status).toBe(404)
+    const inv = (await api.get(`/api/sales/${ids.retSale}`)).body
+    expect(inv.returns).toEqual([])
+    expect(inv.credited).toBe(0)
+    expect((await api.delete(`/api/sales/${ids.retSale}`)).status).toBe(200) // nothing holds the invoice any more
+  })
+})
+
+describe('cheques on invoices', () => {
+  const line = { productId: 0, qty: 2, freeQty: 0, unitPrice: 200, discPct: 0 }
+  const sale = (patch: Record<string, unknown>) => ({ date: today, customerId: ids.shop, payMethod: 'Cheque', billDiscPct: 0, paidOnInvoice: 0, notes: '', chequeNo: '123456', chequeDate: null, lines: [{ ...line, productId: ids.ATCS0030 }], ...patch })
+
+  it('a cheque that is not paid yet needs its date, keeps the invoice due and falls due on that date', async () => {
+    const noDate = await api.post('/api/sales').send(sale({}))
+    expect(noDate.status).toBe(400)
+    expect(noDate.body.error).toMatch(/cheque date/i)
+
+    const past = addDays(today, -3)
+    const res = await api.post('/api/sales').send(sale({ chequeDate: past }))
+    expect(res.status).toBe(201)
+    const inv = (await api.get(`/api/sales/${res.body.id}`)).body
+    expect(inv).toMatchObject({ payMethod: 'Cheque', chequeNo: '123456', chequeDate: past, paidOnInvoice: 0, netTotal: 400, status: 'unpaid', dueDate: past, overdue: true })
+    const pending = (await api.get('/api/sales?status=cheque')).body
+    expect(pending.items.map((i: { id: number }) => i.id)).toContain(res.body.id)
+    expect((await api.get('/api/sales?search=123456')).body.items[0].id).toBe(res.body.id)
+
+    // a cheque paid on the spot needs no date and is settled
+    const paidRes = await api.post('/api/sales').send(sale({ paidOnInvoice: 400, chequeNo: '777' }))
+    expect(paidRes.status).toBe(201)
+    expect((await api.get(`/api/sales/${paidRes.body.id}`)).body).toMatchObject({ status: 'paid', chequeDate: null })
+    expect((await api.get('/api/sales?status=cheque')).body.items.map((i: { id: number }) => i.id)).not.toContain(paidRes.body.id)
+
+    // the cheque clears: the invoice itself becomes paid (not a FIFO payment that would settle older invoices first)
+    const cleared = await api.post(`/api/sales/${res.body.id}/cheque-cleared`)
+    expect(cleared.status).toBe(200)
+    expect(cleared.body).toMatchObject({ invoiceNo: inv.invoiceNo, paidOnInvoice: 400 })
+    expect((await api.get(`/api/sales/${res.body.id}`)).body).toMatchObject({ paidOnInvoice: 400, status: 'paid', due: 0, overdue: false, chequeNo: '123456', chequeDate: past })
+    expect((await api.get('/api/sales?status=cheque')).body.items.map((i: { id: number }) => i.id)).not.toContain(res.body.id)
+    expect((await api.post(`/api/sales/${res.body.id}/cheque-cleared`)).status).toBe(400) // already paid
+    expect((await api.post(`/api/sales/${ids.sale1}/cheque-cleared`)).body.error).toMatch(/not paid by cheque/)
+
+    // cheque details are dropped when the method is not Cheque
+    const cash = await api.post('/api/sales').send(sale({ payMethod: 'Cash', paidOnInvoice: 400, chequeDate: past }))
+    expect(cash.status).toBe(201)
+    expect((await api.get(`/api/sales/${cash.body.id}`)).body).toMatchObject({ chequeNo: '', chequeDate: null })
+
+    for (const id of [res.body.id, paidRes.body.id, cash.body.id]) expect((await api.delete(`/api/sales/${id}`)).status).toBe(200)
+  })
+})
+
 describe('purchases and stock safety', () => {
   it('rejects a duplicate supplier invoice number', async () => {
     const sup = (await api.get('/api/suppliers/options')).body[0]
@@ -337,9 +526,11 @@ describe('lists, pagination and reports', () => {
     const sales = (await api.get(`/api/sales?pageSize=200`)).body
     const from = addDays(today, -90)
     const s = (await api.get(`/api/reports/summary?from=${from}&to=${today}`)).body
+    const returns = (await api.get(`/api/sales-returns?from=${from}&to=${today}&pageSize=200`)).body
+    const returnedCost = returns.items.reduce((a: number, r: { costTotal: number }) => a + r.costTotal, 0)
     expect(s.invoices).toBe(sales.total)
-    expect(s.revenue).toBeCloseTo(sales.summary.netTotal, 2)
-    expect(s.profit).toBeCloseTo(sales.summary.profit, 2)
+    expect(s.revenue).toBeCloseTo(sales.summary.netTotal - returns.summary.netTotal, 2) // sales less returns
+    expect(s.profit).toBeCloseTo(sales.summary.profit - returns.summary.netTotal + returnedCost, 2)
     const byType = (await api.get(`/api/reports/by-type?from=${from}&to=${today}`)).body
     expect(byType.reduce((a: number, t: { revenue: number }) => a + t.revenue, 0)).toBeCloseTo(s.revenue, 2)
   })
@@ -430,8 +621,10 @@ describe('dashboard', () => {
     expect(d.last30).toHaveLength(30)
     expect(d.last30.at(-1).date).toBe(today)
     const todaySales = (await api.get(`/api/sales?from=${today}&to=${today}&pageSize=200`)).body
-    expect(d.today.revenue).toBeCloseTo(todaySales.summary.netTotal, 2)
-    expect(d.last30.at(-1).revenue).toBeCloseTo(todaySales.summary.netTotal, 2)
+    const todayReturns = (await api.get(`/api/sales-returns?from=${today}&to=${today}&pageSize=200`)).body
+    const net = todaySales.summary.netTotal - todayReturns.summary.netTotal
+    expect(d.today.revenue).toBeCloseTo(net, 2)
+    expect(d.last30.at(-1).revenue).toBeCloseTo(net, 2)
     expect(d.toCollect[0].overdue).toBeGreaterThanOrEqual(d.toCollect.at(-1).overdue)
     expect(typeof d.month.lastMonthSameDays).toBe('number')
   })

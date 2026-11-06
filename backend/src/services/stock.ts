@@ -24,11 +24,12 @@ interface StockRow {
   bill_disc: number | null
   sold: number
   free_out: number
+  returned: number
   adjusted: number
 }
 
 /**
- * On hand = opening + purchased (incl. free) − sold (incl. free) + adjustments.
+ * On hand = opening + purchased (incl. free) − sold (incl. free) + returned by customers (back on the shelf) + adjustments.
  * Avg cost = weighted landed cost of opening stock (at list − supplier disc) and every purchase
  * (line net after bill discount, spread over paid + free units).
  */
@@ -44,7 +45,7 @@ export async function stockMap(ex: Executor, productIds?: number[]) {
       coalesce(pu.free_in, 0)::int as free_in, coalesce(pu.gross, 0) as gross_in,
       case when pu.gross > 0 then pu.line_disc_w / pu.gross end as line_disc,
       case when pu.gross > 0 then pu.bill_disc_w / pu.gross end as bill_disc,
-      coalesce(sa.qty, 0)::int as sold, coalesce(sa.free_out, 0)::int as free_out, coalesce(ad.qty, 0)::int as adjusted
+      coalesce(sa.qty, 0)::int as sold, coalesce(sa.free_out, 0)::int as free_out, coalesce(rt.qty, 0)::int as returned, coalesce(ad.qty, 0)::int as adjusted
     from products p
     left join (
       select pl.product_id, sum(pl.qty + pl.free_qty) as qty,
@@ -57,6 +58,11 @@ export async function stockMap(ex: Executor, productIds?: number[]) {
       group by pl.product_id
     ) pu on pu.product_id = p.id
     left join (select product_id, sum(qty + free_qty) as qty, sum(free_qty) as free_out from sales_lines group by product_id) sa on sa.product_id = p.id
+    left join (
+      select rl.product_id, sum(rl.qty + rl.free_qty) as qty
+      from sales_return_lines rl join sales_returns r on r.id = rl.return_id
+      where r.restock group by rl.product_id
+    ) rt on rt.product_id = p.id
     left join (select product_id, sum(qty) as qty from stock_adjustments group by product_id) ad on ad.product_id = p.id
     ${where}`,
   )
@@ -70,7 +76,8 @@ export async function stockMap(ex: Executor, productIds?: number[]) {
       purchased: r.purchased,
       sold: r.sold,
       adjusted: r.adjusted,
-      onHand: r.opening_stock + r.purchased - r.sold + r.adjusted,
+      returned: r.returned,
+      onHand: r.opening_stock + r.purchased - r.sold + r.returned + r.adjusted,
       avgCost: Math.round(avgCost * 10000) / 10000,
       freeIn: r.free_in,
       freeOut: r.free_out,
@@ -154,6 +161,10 @@ export async function productMovements(ex: Executor, productId: number): Promise
       select si.date::text, 'Sale', si.invoice_no, si.id, c.name, 0, sum(sl.qty + sl.free_qty)::int, si.created_at::text
         from sales_lines sl join sales_invoices si on si.id = sl.invoice_id join customers c on c.id = si.customer_id
         where sl.product_id = ${productId} group by si.id, c.name
+      union all
+      select r.date::text, 'Return', r.return_no, r.id, c.name, sum(rl.qty + rl.free_qty)::int, 0, r.created_at::text
+        from sales_return_lines rl join sales_returns r on r.id = rl.return_id join customers c on c.id = r.customer_id
+        where rl.product_id = ${productId} and r.restock group by r.id, c.name
       union all
       select a.date::text, 'Adjustment', a.reason, a.id, a.notes,
              greatest(a.qty, 0), greatest(-a.qty, 0), a.created_at::text

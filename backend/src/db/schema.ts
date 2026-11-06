@@ -26,6 +26,8 @@ export const settings = pgTable('settings', {
   email: text('email').notNull().default(''),
   invoicePrefix: text('invoice_prefix').notNull().default('PJD-'),
   nextInvoiceNo: integer('next_invoice_no').notNull().default(1),
+  /** sales returns are numbered <prefix>R000001, R000002 … */
+  nextReturnNo: integer('next_return_no').notNull().default(1),
   footerNote: text('footer_note').notNull().default(''),
   supplierCustomerCode: text('supplier_customer_code').notNull().default(''),
   allowNegativeStock: boolean('allow_negative_stock').notNull().default(false),
@@ -127,6 +129,10 @@ const invoiceMoney = () => ({
   billDiscount: money('bill_discount').notNull(),
   netTotal: money('net_total').notNull(),
   notes: text('notes').notNull().default(''),
+  /** cheque number when paid by cheque */
+  chequeNo: text('cheque_no').notNull().default(''),
+  /** date on the cheque — a cheque that is not paid yet (paid_on_invoice below the net) falls due on this date */
+  chequeDate: date('cheque_date', { mode: 'string' }),
   createdAt: created(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -163,6 +169,51 @@ export const salesLines = pgTable(
     ...lineCols(),
   },
   (t) => [index('sales_lines_invoice_idx').on(t.invoiceId), index('sales_lines_product_idx').on(t.productId)],
+)
+
+/** Goods a customer sent back (credit note). Stock comes back unless written off; the net total comes off the customer's balance, less any cash refunded. */
+export const salesReturns = pgTable(
+  'sales_returns',
+  {
+    id: serial('id').primaryKey(),
+    returnNo: text('return_no').notNull().unique(),
+    date: date('date', { mode: 'string' }).notNull(),
+    customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
+    /** the invoice the goods were sold on, when known — that invoice cannot be deleted while the return exists */
+    salesInvoiceId: integer('sales_invoice_id').references(() => salesInvoices.id, { onDelete: 'restrict' }),
+    reason: text('reason').notNull().default('Other'),
+    /** true = back on the shelf; false = damaged / expired, written off (stock unchanged) */
+    restock: boolean('restock').notNull().default(true),
+    billDiscPct: pct('bill_disc_pct').notNull().default(0),
+    gross: money('gross').notNull(),
+    lineDiscount: money('line_discount').notNull(),
+    subTotal: money('sub_total').notNull(),
+    billDiscount: money('bill_discount').notNull(),
+    netTotal: money('net_total').notNull(),
+    costTotal: money('cost_total').notNull().default(0),
+    /** cash handed back to the customer; the rest of the net total comes off their balance */
+    refunded: money('refunded').notNull().default(0),
+    refundMethod: text('refund_method').notNull().default(''),
+    notes: text('notes').notNull().default(''),
+    createdAt: created(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('returns_date_idx').on(t.date),
+    index('returns_customer_idx').on(t.customerId),
+    index('returns_invoice_idx').on(t.salesInvoiceId),
+    check('returns_refund_ck', sql`${t.refunded} >= 0 and ${t.refunded} <= ${t.netTotal}`),
+  ],
+)
+
+export const salesReturnLines = pgTable(
+  'sales_return_lines',
+  {
+    id: serial('id').primaryKey(),
+    returnId: integer('return_id').notNull().references(() => salesReturns.id, { onDelete: 'cascade' }),
+    ...lineCols(),
+  },
+  (t) => [index('return_lines_return_idx').on(t.returnId), index('return_lines_product_idx').on(t.productId)],
 )
 
 export const purchaseInvoices = pgTable(

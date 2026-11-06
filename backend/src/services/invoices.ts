@@ -25,6 +25,7 @@ import {
 } from '../db/schema'
 import { badRequest, conflict, notFound } from '../errors'
 import { customerDues, supplierDues } from './dues'
+import { returnedOnInvoice, returnsOfSale } from './returns'
 import { assertStockAvailable, lockProducts, mergeDeltas, stockMap, unitsByProduct } from './stock'
 import { purchaseUsage, usageMessage } from './usage'
 
@@ -75,6 +76,18 @@ export async function saveSale(db: DB, input: SalesInvoiceInput, id?: number): P
     const oldLines = existing ? await tx.select().from(salesLines).where(eq(salesLines.invoiceId, existing.id)) : []
     await checkProducts(tx, input.lines, new Set(oldLines.map((l) => l.productId)))
 
+    // goods already taken back on a sales return must stay on the invoice
+    if (existing) {
+      const returned = await returnedOnInvoice(tx, existing.id)
+      const keep = unitsByProduct(input.lines)
+      const short = [...returned].filter(([pid, units]) => (keep.get(pid) ?? 0) < units)
+      if (short.length) {
+        const [pid, units] = short[0]
+        const [p] = await tx.select({ label: sql<string>`${products.size} || ' ' || ${products.name}` }).from(products).where(eq(products.id, pid))
+        throw badRequest(`${p?.label ?? 'Item'}: ${units} already came back on a sales return, so ${existing.invoiceNo} must keep at least ${units}. Delete the return first.`)
+      }
+    }
+
     // stock leaving = new lines, stock coming back = old lines of this invoice
     await assertStockAvailable(tx, mergeDeltas([unitsByProduct(oldLines), 1], [unitsByProduct(input.lines), -1]))
 
@@ -100,6 +113,8 @@ export async function saveSale(db: DB, input: SalesInvoiceInput, id?: number): P
       payMethod: input.payMethod,
       billDiscPct: input.billDiscPct,
       paidOnInvoice: input.paidOnInvoice,
+      chequeNo: input.payMethod === 'Cheque' ? (input.chequeNo ?? '') : '',
+      chequeDate: input.payMethod === 'Cheque' ? (input.chequeDate ?? null) : null,
       gross: totals.gross,
       lineDiscount: totals.lineDiscount,
       subTotal: totals.subTotal,
@@ -144,10 +159,28 @@ export async function saveSale(db: DB, input: SalesInvoiceInput, id?: number): P
   return result
 }
 
+/**
+ * The cheque handed over with the invoice has been banked and cleared: the invoice is now paid on the invoice
+ * itself (not a separate payment, which would go to the oldest open invoice first).
+ */
+export async function markChequeCleared(db: DB, kind: 'sale' | 'purchase', id: number) {
+  const table = kind === 'sale' ? salesInvoices : purchaseInvoices
+  return db.transaction(async (tx) => {
+    const [inv] = await tx.select({ id: table.id, invoiceNo: table.invoiceNo, payMethod: table.payMethod, paidOnInvoice: table.paidOnInvoice, netTotal: table.netTotal }).from(table).where(eq(table.id, id)).for('update')
+    if (!inv) throw notFound(kind === 'sale' ? 'Sales invoice' : 'Purchase invoice')
+    if (inv.payMethod !== 'Cheque') throw badRequest(`${inv.invoiceNo} was not paid by cheque`)
+    if (inv.paidOnInvoice + 0.004 >= inv.netTotal) throw badRequest(`${inv.invoiceNo} is already marked paid`)
+    await tx.update(table).set({ paidOnInvoice: inv.netTotal, updatedAt: new Date() }).where(eq(table.id, id))
+    return { id: inv.id, invoiceNo: inv.invoiceNo, paidOnInvoice: inv.netTotal }
+  })
+}
+
 export async function deleteSale(db: DB, id: number) {
   await db.transaction(async (tx) => {
-    const [inv] = await tx.select({ id: salesInvoices.id }).from(salesInvoices).where(eq(salesInvoices.id, id)).for('update')
+    const [inv] = await tx.select({ id: salesInvoices.id, invoiceNo: salesInvoices.invoiceNo }).from(salesInvoices).where(eq(salesInvoices.id, id)).for('update')
     if (!inv) throw notFound('Sales invoice')
+    const returns = await returnsOfSale(tx, id)
+    if (returns.length) throw conflict(`Cannot delete ${inv.invoiceNo} — sales return ${returns.map((r) => r.returnNo).join(', ')} was recorded against it. Delete the return first.`)
     await tx.delete(salesInvoices).where(eq(salesInvoices.id, id)) // lines cascade; stock returns automatically
   })
 }
@@ -190,6 +223,7 @@ export async function getSale(ex: Executor, id: number): Promise<SalesInvoice> {
     customerTypeName: h.customerTypeName,
     ...due,
     lines: await linesFor(ex, salesLines, id),
+    returns: await returnsOfSale(ex, id),
   }
 }
 
@@ -236,6 +270,8 @@ export async function savePurchase(db: DB, input: PurchaseInvoiceInput, id?: num
       payMethod: input.payMethod,
       billDiscPct: input.billDiscPct,
       paidOnInvoice: input.paidOnInvoice,
+      chequeNo: input.payMethod === 'Cheque' ? (input.chequeNo ?? '') : '',
+      chequeDate: input.payMethod === 'Cheque' ? (input.chequeDate ?? null) : null,
       gross: totals.gross,
       lineDiscount: totals.lineDiscount,
       subTotal: totals.subTotal,

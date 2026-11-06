@@ -1,0 +1,126 @@
+{
+  "_about": "7 handwritten Pasyale bill-book sales of 3-4 Nov 2026 (photos sent 6 Nov 2026). Lines carry no discount; the bill discount is the % at the bottom. 'written' = handwritten item name. Bills 189765 and 189772 carry lump-sum RTN (returned goods) deductions on the paper — entered as sold, the return noted (record as a sales return). 189776 has no date on the paper (assumed 4 Nov, same round as 189765-189775).",
+  "payMethod": "Credit",
+  "customers": [
+    { "code": "THANIKA-OSU", "name": "Thanika Osu", "typeCode": "PHARMACY", "discPct": 35, "notes": "Town on bill 189756 illegible (B…lla?); purple stamp unreadable" },
+    { "code": "JEEWADA-OSU", "name": "Jeewada Osu - Galapitamada", "typeCode": "PHARMACY", "area": "Galapitamada", "discPct": 30, "notes": "Stamp: Dr G.R. Amarasekara, Ayurveda physician" },
+    { "code": "MORATHOTA-SB", "name": "Morathota Sinhala Beheth - Bulathkohupitiya", "typeCode": "SHOP", "area": "Morathota", "discPct": 30, "notes": "Stamp: Sinhala Beheth Weladasela, No 19, Bulathkohupitiya Road, Morathota" },
+    { "code": "DR-MAYURA", "name": "Dr Mayura - Arandara", "typeCode": "MEDICAL", "area": "Arandara, Kegalle", "discPct": 30, "notes": "Stamp: BAMS (University of Colombo) Reg 12800, Govt Ayurvedic Hospital Makuddala - Helamada" },
+    { "code": "CHANDIMA-OSU", "name": "Chandima Osusala - Yatiyanthota", "typeCode": "PHARMACY", "area": "Yatiyanthota", "discPct": 30, "notes": "Stamp: Chandima Osuhala, No 08, Yatiyanthota" },
+    { "code": "DR-PERSAHAN", "name": "Dr Persahan - Maspotha (Kandewatta Paramparika Wedamedura)", "typeCode": "MEDICAL", "area": "Maspotha", "discPct": 35, "notes": "Name as handwritten on bill 189775 (unclear). Stamp: Kandewatta Paramparika Wedamedura (Pvt) Ltd, R.C. Liyanaarachchi" },
+    { "code": "SB-OSU-KARANDUPONA", "name": "S B Osu (Suwanga Beheth Shalawa) - Karandupona", "typeCode": "SHOP", "area": "Karandupona", "discPct": 30, "notes": "Stamp: B.D. Amarasekara, Suwanga Beheth Shalawa, Nuwara Para, Karandupona" }
+  ],
+  "invoices": [
+    {
+      "billNo": "189756", "date": "2026-11-03", "customer": "THANIKA-OSU", "billDiscPct": 35, "payMethod": "Credit", "paid": 0,
+      "written": { "gross": 48510, "netTotal": 31532 }, "photos": ["189756-p1.jpg"],
+      "note": "Credit ticked. Net written 31,532 (35% of 48,510 = 16,978.50); a circled 31,572 on the page is a slip",
+      "lines": [
+        { "code": "CHDH0050", "size": "50g", "name": "DHATHREE CHOORNA", "written": "Dathree churna 50g", "qty": 3, "price": 170 },
+        { "code": "CHSU0100", "size": "100g", "name": "SUDARSHANA CHOORNA", "written": "Sudarsana churna 100g", "qty": 3, "price": 600 },
+        { "code": "CHMB0050", "size": "50g", "name": "MANIBADRA", "written": "Manibadra churna 50g", "qty": 3, "price": 300 },
+        { "code": "RSRH0050", "size": "50g", "name": "RANAHANSA RASAYANA", "written": "Ranahansa Rasayana 50g", "qty": 3, "price": 350 },
+        { "code": "VTCH0100", "size": "100g", "name": "CHANDRAPRABHA VATI", "written": "Chandra prabha vati 100g", "qty": 3, "price": 1100 },
+        { "code": "VTCH0050", "size": "50g", "name": "CHANDRAPHABHA VATI", "written": "Chandra prabha vati 50g", "qty": 3, "price": 600 },
+        { "code": "KLBR0100", "size": "100g", "name": "BUDDHARAJA KALKA", "written": "Buddharaja kalka 100g", "qty": 3, "price": 950 },
+        { "code": "KLBR0050", "size": "50g", "name": "BUDDHARAJA KALKA", "written": "Buddharaja kalka 50g", "qty": 3, "price": 500 },
+        { "code": "VTSR0050", "size": "50g", "name": "SEETHARAMA VATI", "written": "Seetharama vati 50g", "qty": 3, "price": 800 },
+        { "code": "VTSR0100", "size": "100g", "name": "SEETHARAMA VATI", "written": "Seetharama vati 100g", "qty": 3, "price": 1500 },
+        { "code": "VTCH0100", "size": "100g", "name": "CHANDRAPRABHA VATI", "written": "Chandra prabha vati 100g (2nd line)", "qty": 3, "price": 1100 },
+        { "code": "GGGK0050", "size": "50g", "name": "GOKSHURADI", "written": "Gokshuradi guggul 50g", "qty": 3, "price": 700 },
+        { "code": "GGYG0050", "size": "50g", "name": "YOGARAJA", "written": "Yogaraja guggul 50g", "qty": 3, "price": 700 },
+        { "code": "THMN0180", "size": "180ML", "name": "MAHA NARAYANA", "written": "Narayana 180ml", "qty": 6, "price": 800 },
+        { "code": "THSP0180", "size": "180ML", "name": "SARSHAPADI", "written": "Sarshapadi thaila 180ml", "qty": 6, "price": 900 },
+        { "code": "THST0030", "size": "30ML", "name": "SATYAVADI", "written": "Sathyavadi thaila 30ml", "qty": 12, "free": 1, "price": 250 },
+        { "code": "RSRH0200", "size": "200g", "name": "RANAHANSA RASAYANA", "written": "Ranahansa Rasayana 200g", "qty": 6, "price": 1200 }
+      ]
+    },
+    {
+      "billNo": "189765", "date": "2026-11-04", "customer": "JEEWADA-OSU", "billDiscPct": 30, "payMethod": "Credit", "paid": 0,
+      "written": { "gross": 117680, "netTotal": 82376 }, "photos": ["189765-p1.jpg"],
+      "note": "No payment ticked. RTN on the bill: Rose water 750ml x2 @430 = 860 less 30% = 602 deducted (the bill's own sum says 258/502 and a final 81,874; correct figure 81,774) — record as a sales return",
+      "lines": [
+        { "code": "THKU0180", "size": "180ML", "name": "KUBJAPRASARINI", "written": "Kubjaprasarani T 180ml", "qty": 6, "price": 1300 },
+        { "code": "THNR0180", "size": "180ML", "name": "NIRGUNDIYADI", "written": "Nirgundadi Thaila 180ml", "qty": 6, "price": 850 },
+        { "code": "ATPS0180", "size": "180ML", "name": "PAS THEL", "written": "Pas Thail 180ml", "qty": 6, "price": 750 },
+        { "code": "THKB0030", "size": "30ML", "name": "KEDUMBINDUM", "written": "Kadum bidum 30ml", "qty": 12, "free": 1, "price": 200 },
+        { "code": "THBA0030", "size": "30ML", "name": "BALAKORANDA", "written": "Balakoranda 30ml", "qty": 24, "free": 2, "price": 240 },
+        { "code": "THKU0030", "size": "30ML", "name": "KUBJAPRASARINI", "written": "Kubjaprasarani 30ml", "qty": 24, "free": 2, "price": 300 },
+        { "code": "THSU0030", "size": "30ML", "name": "SOOLAHARA", "written": "Shulahara Th 30ml", "qty": 24, "free": 2, "price": 200 },
+        { "code": "THKB0030", "size": "30ML", "name": "KEDUMBINDUM", "written": "Kedum bidum 30ml (2nd line)", "qty": 36, "free": 3, "price": 200 },
+        { "code": "CHSK0100", "size": "100g", "name": "SUKUMARA", "written": "Sukumara churna 100g", "qty": 6, "price": 280 },
+        { "code": "CHSK0050", "size": "50g", "name": "SUKUMARA", "written": "Sukumara churna 50g", "qty": 6, "price": 160 },
+        { "code": "THSU4500", "size": "4.5L", "name": "SOOLAHARA", "written": "Shulahara Thail 4.5l", "qty": 1, "price": 16000 },
+        { "code": "NPKP1000", "size": "1kg", "name": "KETA KELLA PATHTHUWA", "written": "Katekala Paththuwa 1kg", "qty": 10, "price": 5000 },
+        { "code": "THNK0100", "size": "100ML", "name": "NEELA KESHIKA", "written": "Neelakeshika 100ml", "qty": 6, "price": 380 },
+        { "code": "GGJW0100", "size": "100g", "name": "JEEWANANDA", "written": "Jeewananda vatee 100g", "qty": 1, "price": 2000 }
+      ]
+    },
+    {
+      "billNo": "189768", "date": "2026-11-04", "customer": "MORATHOTA-SB", "billDiscPct": 30, "payMethod": "Credit", "paid": 0,
+      "written": { "gross": 10680, "netTotal": 7476 }, "photos": ["189768-p1.jpg"],
+      "note": "Payment box cut off in the photo — entered as credit",
+      "lines": [
+        { "code": "THBU0030", "size": "30ML", "name": "BRUNGAMALAKA", "written": "Brungamalaka thaila 30ml", "qty": 12, "free": 1, "price": 200 },
+        { "code": "THSV0030", "size": "30ML", "name": "SARVAVISADI", "written": "Sarvavishadi th 30ml", "qty": 12, "free": 1, "price": 200 },
+        { "code": "THNK0100", "size": "100ML", "name": "NEELA KESHIKA", "written": "Neela Keshika 100ml", "qty": 6, "price": 380 },
+        { "code": "NPKP0100", "size": "100g", "name": "KETA KELLA PATHTHUWA", "written": "Ketakele Paththuwa 100g", "qty": 3, "price": 600 },
+        { "code": "NPKP0100", "size": "100g", "name": "KETA KELLA PATHTHUWA", "written": "Ketakele Paththuwa 100g (2nd line)", "qty": 3, "price": 600 }
+      ]
+    },
+    {
+      "billNo": "189772", "date": "2026-11-04", "customer": "DR-MAYURA", "billDiscPct": 30, "payMethod": "Credit", "paid": 0,
+      "written": { "gross": 93000, "netTotal": 65100 }, "photos": ["189772-p1.jpg"],
+      "note": "Credit ticked. Date written 2024.11.4 (2026). Two lines struck out on the bill (Aswaganda churna 50g x2, Baskaralawana 50g x3) and left out of the total. RTN on the bill: Aswagandha choorna 1kg x1 @4500 + 'Sowkeewathi' 1kg x3 @3500 = 15,000 less 30% = 10,500 deducted, leaving 54,600 to pay — record as a sales return",
+      "lines": [
+        { "code": "THAS4500", "size": "4.5L", "name": "ASHWAGANDA THEL", "written": "Aswaganda Thilaya 4.5l", "qty": 2, "price": 18700 },
+        { "code": "THNR4500", "size": "4.5L", "name": "NIRGUNDIYADI", "written": "Nirgundiayadi Thila 4.5l", "qty": 2, "price": 16500 },
+        { "code": "THMN4500", "size": "4.5L", "name": "MAHA NARAYANA", "written": "Narayana Thil 4.5l", "qty": 1, "price": 16000 },
+        { "code": "THSV0750", "size": "750ML", "name": "SARVAVISADI", "written": "Sarwavishadi Thl 750ml", "qty": 2, "price": 3300 }
+      ]
+    },
+    {
+      "billNo": "189774", "date": "2026-11-04", "customer": "CHANDIMA-OSU", "billDiscPct": 30, "payMethod": "Credit", "paid": 0,
+      "written": { "gross": 15200, "netTotal": 10640 }, "photos": ["189774-p1.jpg"],
+      "note": "Credit ticked",
+      "lines": [
+        { "code": "CHBK0050", "size": "50g", "name": "BASKARALAWANA", "written": "Baskaralawana 50g", "qty": 3, "price": 290 },
+        { "code": "GGKC0100", "size": "100g", "name": "KANCHANARA", "written": "Kanchanara guggul 100g", "qty": 2, "price": 1600 },
+        { "code": "THST0030", "size": "30ML", "name": "SATYAVADI", "written": "Sattiyavadi Thaila 30ml", "qty": 12, "free": 1, "price": 250 },
+        { "code": "RSRH0050", "size": "50g", "name": "RANAHANSA RASAYANA", "written": "Ranahansa Rasayana 50g", "qty": 3, "price": 350 },
+        { "code": "NPCS-P0100", "size": "100ML", "name": "PAWATTA WELMEE", "written": "Pawatta velmee 100ml", "qty": 12, "free": 1, "price": 400 },
+        { "code": "THNK0100", "size": "100ML", "name": "NEELA KESHIKA", "written": "Neela Keshika 100ml", "qty": 6, "price": 380 }
+      ]
+    },
+    {
+      "billNo": "189775", "date": "2026-11-04", "customer": "DR-PERSAHAN", "billDiscPct": 35, "payMethod": "Cheque", "paid": 0,
+      "written": { "gross": 232800, "netTotal": 151320 }, "photos": ["189775-p1.jpg"],
+      "note": "Cheque ticked (no cheque number or date written) — cheque not yet paid; add the cheque date on the invoice. Sarsapadi 4.5l first written 33,000 then corrected to 16,500",
+      "lines": [
+        { "code": "THSU4500", "size": "4.5L", "name": "SOOLAHARA", "written": "Shoolahara 4.5L", "qty": 1, "price": 16000 },
+        { "code": "THKB4500", "size": "4.5L", "name": "KEDUMBINDUM", "written": "Kedum bidum 4.5L", "qty": 1, "price": 15000 },
+        { "code": "QUER4500", "size": "4.5L", "name": "ERANDA SAPTHAKA", "written": "Garanda sapthaka 4.5L", "qty": 1, "price": 5000 },
+        { "code": "QUDB4500", "size": "4.5L", "name": "DANTHIMULA BALADI", "written": "Danthimula Baladi 4.5L", "qty": 1, "price": 5500 },
+        { "code": "VTSR0500", "size": "500g", "name": "SEETHARAMA VATI", "written": "Seetharama vatti 500g", "qty": 2, "price": 6900 },
+        { "code": "LPDL1000", "size": "1kg", "name": "DASHANGA LEPA", "written": "Dasangalepa 1kg", "qty": 4, "price": 7500 },
+        { "code": "QURS4500", "size": "4.5L", "name": "RASHNASAPTHAKA", "written": "Rasna sapthaka 4.5L", "qty": 1, "price": 5500 },
+        { "code": "RSAS1000", "size": "1kg", "name": "ASHWAGANDA RASAYANA", "written": "Aswaganda Rasayana 1kg", "qty": 5, "price": 4000 },
+        { "code": "KLBR1000", "size": "1kg", "name": "BUDDHARAJA KALKAYA", "written": "Buddharaja kalka 1kg", "qty": 2, "price": 9000 },
+        { "code": "THSP4500", "size": "4.5L", "name": "SARSHAPADI", "written": "Sarsapadi 4.5L", "qty": 1, "price": 16500 },
+        { "code": "CHAG1000", "size": "1kg", "name": "ASHWAGANDA CHOORNA", "written": "Aswaganda choorna 1kg", "qty": 5, "price": 5300 },
+        { "code": "CHSU1000", "size": "1kg", "name": "SUDARSHANA CHOORNA", "written": "Maha Sudarsana 1kg", "qty": 10, "price": 5600 },
+        { "code": "NPKP1000", "size": "1kg", "name": "KETA KELLA PATHTHUWA", "written": "Kedakele Paththu 1kg", "qty": 1, "price": 5000 }
+      ]
+    },
+    {
+      "billNo": "189776", "date": "2026-11-04", "customer": "SB-OSU-KARANDUPONA", "billDiscPct": 30, "payMethod": "Credit", "paid": 0,
+      "written": { "gross": 10510, "netTotal": 7357 }, "photos": ["189776-p1.jpg"],
+      "note": "No date on the bill (assumed 4 Nov 2026). No payment ticked. One line (…lepa 750ml x1) struck out. Rose water 750ml billed at 430 (ERP list 800)",
+      "lines": [
+        { "code": "THSP0030", "size": "30ML", "name": "SARSHAPADI", "written": "Sarsapadi 30ml", "qty": 24, "price": 220 },
+        { "code": "THSU0030", "size": "30ML", "name": "SOOLAHARA", "written": "Shoolahara 30ml", "qty": 24, "price": 200 },
+        { "code": "OTRW0750", "size": "750ML", "name": "ROSE WATER", "written": "Rose water 750ml", "qty": 1, "price": 430 }
+      ]
+    }
+  ]
+}
