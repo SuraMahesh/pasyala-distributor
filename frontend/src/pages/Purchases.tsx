@@ -118,6 +118,17 @@ export function PurchaseList() {
             const disc = l.reduce((a, r) => a + r.billDiscount, 0)
             return l.length ? <tr><td colSpan={2}>Total · {l.length} invoices</td><td className="hidden lg:table-cell" /><Td>{rs(sub)}</Td><Td>{sub ? `${((disc / sub) * 100).toFixed(1)}%` : ''}</Td><Td>{rs(disc)}</Td><Td>{rs(l.reduce((a, r) => a + r.netTotal, 0))}</Td></tr> : null
           })()}
+          totals={(() => {
+            const l = breakdown.rows
+            const sub = l.reduce((a, r) => a + r.subTotal, 0)
+            const disc = l.reduce((a, r) => a + r.billDiscount, 0)
+            return [
+              { label: 'Invoices', value: l.length },
+              { label: 'Sub total', value: `Rs ${rs(sub)}` },
+              { label: 'Bill discount', value: <span className="font-semibold text-brand-700">Rs {rs(disc)}{sub ? ` (${((disc / sub) * 100).toFixed(1)}%)` : ''}</span> },
+              { label: 'Net total', value: `Rs ${rs(l.reduce((a, r) => a + r.netTotal, 0))}` },
+            ]
+          })()}
         />
       )}
       <Filters>

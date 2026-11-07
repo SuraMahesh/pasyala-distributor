@@ -40,6 +40,8 @@ export interface DataTableProps<T> {
   /** custom card for phones; defaults to a label/value list built from the columns */
   mobileCard?: (row: T) => ReactNode
   footer?: ReactNode
+  /** totals (or any summary) shown under the cards on phones, where the table footer is not rendered */
+  mobileFooter?: ReactNode
   pageSizes?: number[]
 }
 
@@ -51,7 +53,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
   const sortId = useId()
   const {
     rows, columns, rowKey, loading, error, onRetry, empty, page, pageSize, total, onPage, onPageSize,
-    sort, dir = 'asc', onSort, rowLink, rowClassName, mobileCard, footer, pageSizes = [10, 25, 50, 100],
+    sort, dir = 'asc', onSort, rowLink, rowClassName, mobileCard, footer, mobileFooter, pageSizes = [10, 25, 50, 100],
   } = p
 
   if (error) return <ErrorBox error={error} onRetry={onRetry} />
@@ -100,6 +102,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
               {mobileCard ? mobileCard(row) : <DefaultCard row={row} columns={columns} />}
             </li>
           ))}
+          {mobileFooter && rows.length > 0 && <li className="bg-stone-50 px-4 py-3 font-medium">{mobileFooter}</li>}
         </ul>
 
         {/* tablets/desktop: table */}

@@ -142,6 +142,21 @@ export function SalesList() {
             const m = l.reduce((a, r) => a + r.discountMargin, 0)
             return l.length ? <tr><td colSpan={3}>Total · {l.length} invoices</td><Td>{pct(given, g)}</Td><Td>{rs(g)}</Td><Td>{rs(given)}</Td><Td className="hidden lg:table-cell">{rs(item)}</Td><Td className="hidden lg:table-cell">{pct(m, g)}</Td><Td>{rs(m)}</Td><Td className="hidden xl:table-cell">{rs(l.reduce((a, r) => a + r.netTotal, 0))}</Td></tr> : null
           })()}
+          totals={(() => {
+            const l = breakdown.rows
+            const g = l.reduce((a, r) => a + r.gross, 0)
+            const given = l.reduce((a, r) => a + r.discountGiven, 0)
+            const item = l.reduce((a, r) => a + r.itemDiscount, 0)
+            const m = l.reduce((a, r) => a + r.discountMargin, 0)
+            return [
+              { label: 'Invoices', value: l.length },
+              { label: 'Gross', value: `Rs ${rs(g)}` },
+              { label: `Discount given (${pct(given, g)})`, value: `Rs ${rs(given)}` },
+              { label: 'Item discount 22%', value: `Rs ${rs(item)}` },
+              { label: `Discount margin (${pct(m, g)})`, value: <span className={`font-semibold ${m < 0 ? 'text-red-600' : 'text-brand-700'}`}>Rs {rs(m)}</span> },
+              { label: 'Net', value: `Rs ${rs(l.reduce((a, r) => a + r.netTotal, 0))}` },
+            ]
+          })()}
         />
       )}
       <Filters>
