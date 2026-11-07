@@ -23,13 +23,15 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
   )
 }
 
-export function Stat({ label, value, hint, tone = 'default', icon, to }: {
+export function Stat({ label, value, hint, tone = 'default', icon, to, onClick }: {
   label: string
   value: ReactNode
   hint?: ReactNode
   tone?: 'default' | 'good' | 'warn' | 'bad'
   icon?: ReactNode
   to?: string
+  /** makes the tile a button (e.g. opens the invoice-by-invoice table behind the figure) */
+  onClick?: () => void
 }) {
   const toneCls = { default: 'text-stone-900', good: 'text-brand-700', warn: 'text-amber-600', bad: 'text-red-600' }[tone]
   const body = (
@@ -44,6 +46,8 @@ export function Stat({ label, value, hint, tone = 'default', icon, to }: {
   )
   return to ? (
     <Link to={to} className="card block p-3 transition hover:border-brand-200 hover:shadow md:p-4">{body}</Link>
+  ) : onClick ? (
+    <button type="button" onClick={onClick} className="card block w-full p-3 text-left transition hover:border-brand-200 hover:shadow md:p-4">{body}</button>
   ) : (
     <div className="card p-3 md:p-4">{body}</div>
   )

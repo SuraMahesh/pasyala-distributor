@@ -4,6 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { betaZodTool } from '@anthropic-ai/sdk/helpers/beta/zod'
 import { z } from 'zod'
+import { ADJ_REASONS } from '@pjd/shared'
 import type { Alert, CustomerType, CustomerWithBalance, PurchaseInvoice, SalesInvoice, StatementRow, SupplierWithBalance } from '@pjd/shared'
 import { defaultAssistantModel, llmProvider } from './llm'
 import type { AgingRow, ByCustomerRow, ByProductRow, ByTypeRow, DailyRow, ReportSummary } from './reports'
@@ -93,7 +94,6 @@ export interface AssistantData {
   priceQuote(productId: number, target: { customerId?: number; customerTypeId?: number }, qty: number): Promise<PriceQuoteRow | null>
 }
 
-const ADJ_REASONS = ['Count correction', 'Damage', 'Expired', 'Return', 'Sample', 'Other'] as const
 const j = (v: unknown) => JSON.stringify(v)
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(n, hi))
 const sum = <T>(list: T[], f: (t: T) => number) => Math.round(list.reduce((s, t) => s + f(t), 0) * 100) / 100

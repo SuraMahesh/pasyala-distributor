@@ -69,6 +69,9 @@ export function transactionRoutes(db: DB) {
           id: salesInvoices.id, invoiceNo: salesInvoices.invoiceNo, date: salesInvoices.date, payMethod: salesInvoices.payMethod,
           netTotal: salesInvoices.netTotal, costTotal: salesInvoices.costTotal, paidOnInvoice: salesInvoices.paidOnInvoice,
           chequeNo: salesInvoices.chequeNo, chequeDate: salesInvoices.chequeDate,
+          gross: salesInvoices.gross, billDiscPct: salesInvoices.billDiscPct,
+          // the supplier's item discount (22%) on the same goods — what the customer's discount is measured against
+          itemDiscount: sql<number>`(select coalesce(sum(sl.qty * sl.unit_price * p.supplier_disc_pct / 100), 0) from sales_lines sl join products p on p.id = sl.product_id where sl.invoice_id = ${salesInvoices.id})`,
           customerId: salesInvoices.customerId, partyName: customers.name, area: customers.area, typeName: customerTypes.name,
           imageCount: sql<number>`(select count(*)::int from invoice_images ii where ii.sales_invoice_id = ${salesInvoices.id})`,
         })
@@ -78,7 +81,13 @@ export function transactionRoutes(db: DB) {
         .where(where.length ? and(...where) : undefined),
       customerDues(db),
     ])
-    let items = list.map((i) => ({ ...i, ...dues.byInvoice.get(i.id)! }))
+    // discount given = everything off the list price (line + bill discounts); discount margin = the part beyond the
+    // supplier's item discount (a 30% customer: 30 − 22 = 8% of gross; a 35% customer: 13%)
+    let items = list.map((i) => {
+      const itemDiscount = round2(Number(i.itemDiscount))
+      const discountGiven = round2(i.gross - i.netTotal)
+      return { ...i, itemDiscount, discountGiven, discountMargin: round2(discountGiven - itemDiscount), ...dues.byInvoice.get(i.id)! }
+    })
     if (q.status === 'paid') items = items.filter((i) => i.status === 'paid')
     if (q.status === 'due') items = items.filter((i) => i.status !== 'paid')
     if (q.status === 'overdue') items = items.filter((i) => i.overdue)
@@ -86,11 +95,17 @@ export function transactionRoutes(db: DB) {
     items = byImages(items, q.images)
     const { filtered, ...page } = paginate(items, q, {
       search: (i) => `${i.invoiceNo} ${i.partyName} ${i.area} ${i.typeName} ${i.chequeNo}`,
-      sorters: invoiceSorters,
+      sorters: { ...invoiceSorters, discountMargin: (i: { discountMargin: number }) => i.discountMargin },
       defaultSort: { key: 'date', dir: 'desc' },
     })
     const sum = (f: (i: (typeof items)[number]) => number) => round2(filtered.reduce((s, i) => s + f(i), 0))
-    res.json({ ...page, summary: { count: filtered.length, netTotal: sum((i) => i.netTotal), due: sum((i) => i.due), profit: sum((i) => i.netTotal - i.costTotal) } })
+    res.json({
+      ...page,
+      summary: {
+        count: filtered.length, netTotal: sum((i) => i.netTotal), due: sum((i) => i.due), profit: sum((i) => i.netTotal - i.costTotal),
+        gross: sum((i) => i.gross), discountGiven: sum((i) => i.discountGiven), itemDiscount: sum((i) => i.itemDiscount), discountMargin: sum((i) => i.discountMargin),
+      },
+    })
   })
   r.get('/sales/:id', async (req, res) => res.json(await getSale(db, idParam(req.params.id))))
   r.post('/sales', async (req, res) => res.status(201).json(await saveSale(db, parse(salesInvoiceSchema, req.body))))
@@ -254,11 +269,12 @@ export function transactionRoutes(db: DB) {
 
   // ---------------- stock adjustments
   r.get('/adjustments', async (req, res) => {
-    const q = listQuerySchema.extend({ ...dateRange, productId: z.coerce.number().int().optional() }).parse(req.query)
+    const q = listQuerySchema.extend({ ...dateRange, productId: z.coerce.number().int().optional(), reason: z.string().default('') }).parse(req.query)
     const where: SQL[] = []
     if (q.from) where.push(gte(stockAdjustments.date, q.from))
     if (q.to) where.push(lte(stockAdjustments.date, q.to))
     if (q.productId) where.push(eq(stockAdjustments.productId, q.productId))
+    if (q.reason) where.push(eq(stockAdjustments.reason, q.reason))
     const list = await db
       .select({
         id: stockAdjustments.id, date: stockAdjustments.date, productId: stockAdjustments.productId, qty: stockAdjustments.qty,

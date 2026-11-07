@@ -3,6 +3,7 @@ import { Eye, FileSpreadsheet, Paperclip, Pencil, Plus, Printer, ScanLine, Trash
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { qtyFmt, rs, type SalesInvoice } from '@pjd/shared'
+import { BreakdownModal, Td } from '../components/BreakdownModal'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
 import InvoiceDocument from '../components/InvoiceDocument'
@@ -26,6 +27,14 @@ interface SaleRow {
   chequeDate: string | null
   netTotal: number
   costTotal: number
+  gross: number
+  billDiscPct: number
+  /** gross − net: everything taken off the list price for this customer */
+  discountGiven: number
+  /** the supplier's item discount (22%) on the same goods */
+  itemDiscount: number
+  /** discountGiven − itemDiscount: 8% of gross for a 30% customer, 13% for 35% */
+  discountMargin: number
   customerId: number
   partyName: string
   area: string
@@ -42,7 +51,18 @@ export function SalesList() {
   const [s, set] = useListState({ from: '', to: '', status: '', typeId: '', customerId: '', images: '', sort: 'date', dir: 'desc' as const })
   const { data: types = [] } = useCustomerTypes()
   const { data: customers = [] } = useCustomerOptions()
-  const q = usePaged<SaleRow, { count: number; netTotal: number; due: number; profit: number }>('sales', '/sales', s)
+  const q = usePaged<SaleRow, { count: number; netTotal: number; due: number; profit: number; gross: number; discountGiven: number; itemDiscount: number; discountMargin: number }>('sales', '/sales', s)
+  // the invoice-by-invoice table behind the Discount margin tile (every row of the current filter)
+  const [breakdown, setBreakdown] = useState<{ rows: SaleRow[]; loading: boolean } | null>(null)
+  const openBreakdown = async () => {
+    setBreakdown({ rows: [], loading: true })
+    try {
+      setBreakdown({ rows: await fetchAll<SaleRow>('/sales', { ...s, page: undefined, pageSize: undefined }), loading: false })
+    } catch {
+      setBreakdown(null)
+    }
+  }
+  const pct = (part: number, whole: number) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : '')
 
   const columns: Column<SaleRow>[] = [
     { key: 'no', header: 'Invoice', sortKey: 'invoiceNo', render: (r) => <Link to={`/sales/${r.id}`} className="font-medium text-brand-700 hover:underline">{r.invoiceNo}</Link> },
@@ -62,11 +82,12 @@ export function SalesList() {
       name: 'Sales invoices',
       columns: [
         { header: 'Invoice' }, { header: 'Date', type: 'date' }, { header: 'Customer' }, { header: 'Customer type' }, { header: 'Area' },
-        { header: 'Method' }, { header: 'Net total', type: 'money' }, { header: 'Cost', type: 'money' }, { header: 'Profit', type: 'money' },
+        { header: 'Method' }, { header: 'Gross', type: 'money' }, { header: 'Disc %' }, { header: 'Discount given', type: 'money' }, { header: 'Item discount (supplier)', type: 'money' }, { header: 'Discount margin', type: 'money' },
+        { header: 'Net total', type: 'money' }, { header: 'Cost', type: 'money' }, { header: 'Profit', type: 'money' },
         { header: 'Paid', type: 'money' }, { header: 'Due', type: 'money' }, { header: 'Status' }, { header: 'Due date', type: 'date' }, { header: 'Cheque no' }, { header: 'Cheque date', type: 'date' },
       ],
-      rows: all.map((r) => [r.invoiceNo, r.date, r.partyName, r.typeName, r.area, r.payMethod, r.netTotal, r.costTotal, r.netTotal - r.costTotal, r.paid, r.due, r.overdue ? 'Overdue' : r.status === 'paid' ? 'Paid' : r.status === 'partial' ? 'Part paid' : 'Unpaid', r.dueDate, r.chequeNo, r.chequeDate]),
-      totals: [6, 7, 8, 9, 10],
+      rows: all.map((r) => [r.invoiceNo, r.date, r.partyName, r.typeName, r.area, r.payMethod, r.gross, r.billDiscPct, r.discountGiven, r.itemDiscount, r.discountMargin, r.netTotal, r.costTotal, r.netTotal - r.costTotal, r.paid, r.due, r.overdue ? 'Overdue' : r.status === 'paid' ? 'Paid' : r.status === 'partial' ? 'Part paid' : 'Unpaid', r.dueDate, r.chequeNo, r.chequeDate]),
+      totals: [6, 8, 9, 10, 11, 12, 13, 14, 15],
     }])
   }
 
@@ -85,12 +106,44 @@ export function SalesList() {
           </>
         }
       />
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat label="Invoices" value={qtyFmt(sum?.count)} />
-        <Stat label="Net sales" value={`Rs ${rs(sum?.netTotal)}`} />
+        <Stat label="Net sales" value={`Rs ${rs(sum?.netTotal)}`} hint={sum?.gross ? `gross Rs ${rs(sum.gross)} less Rs ${rs(sum.discountGiven)} discounts` : undefined} />
+        <Stat label="Discount margin" value={`Rs ${rs(sum?.discountMargin)}`} hint={sum?.gross ? `${pct(sum.discountMargin, sum.gross)} of gross · customer discount less the 22% item discount · tap for the table` : 'customer discount less the 22% item discount'} onClick={openBreakdown} />
         <Stat label="Gross profit" value={`Rs ${rs(sum?.profit)}`} tone="good" />
         <Stat label="Still to collect" value={`Rs ${rs(sum?.due)}`} tone={sum?.due ? 'warn' : 'default'} />
       </div>
+      {breakdown && (
+        <BreakdownModal<SaleRow>
+          title="Discount margin by invoice"
+          subtitle="Discount given = gross − net (the 30% / 35% the customer gets). Item discount = the supplier's 22% on the same goods. Discount margin = the difference: 8% of gross for a 30% customer, 13% for 35%."
+          rows={breakdown.rows}
+          loading={breakdown.loading}
+          rowKey={(r) => r.id}
+          initialSort={{ key: 'date', dir: 'desc' }}
+          onClose={() => setBreakdown(null)}
+          columns={[
+            { key: 'no', header: 'Invoice', sortKey: 'invoiceNo', sortValue: (r) => r.invoiceNo, render: (r) => <Link to={`/sales/${r.id}`} className="font-medium text-brand-700 hover:underline">{r.invoiceNo}</Link> },
+            { key: 'date', header: 'Date', sortKey: 'date', sortValue: (r) => r.date, render: (r) => <span className="text-stone-500">{r.date}</span> },
+            { key: 'cust', header: 'Customer', sortKey: 'party', sortValue: (r) => r.partyName, render: (r) => r.partyName },
+            { key: 'pct', header: 'Disc %', align: 'right', render: (r) => pct(r.discountGiven, r.gross) },
+            { key: 'gross', header: 'Gross', align: 'right', sortKey: 'gross', sortValue: (r) => r.gross, render: (r) => rs(r.gross) },
+            { key: 'given', header: 'Discount given', align: 'right', sortKey: 'given', sortValue: (r) => r.discountGiven, render: (r) => rs(r.discountGiven) },
+            { key: 'item', header: 'Item disc 22%', align: 'right', hideBelow: 'lg', render: (r) => <span className="text-stone-500">{rs(r.itemDiscount)}</span> },
+            { key: 'mpct', header: 'Margin %', align: 'right', hideBelow: 'lg', render: (r) => pct(r.discountMargin, r.gross) },
+            { key: 'margin', header: 'Discount margin', align: 'right', sortKey: 'margin', sortValue: (r) => r.discountMargin, render: (r) => <span className={`font-medium ${r.discountMargin < 0 ? 'text-red-600' : 'text-brand-700'}`}>{rs(r.discountMargin)}</span> },
+            { key: 'net', header: 'Net', align: 'right', hideBelow: 'xl', render: (r) => rs(r.netTotal) },
+          ]}
+          footer={(() => {
+            const l = breakdown.rows
+            const g = l.reduce((a, r) => a + r.gross, 0)
+            const given = l.reduce((a, r) => a + r.discountGiven, 0)
+            const item = l.reduce((a, r) => a + r.itemDiscount, 0)
+            const m = l.reduce((a, r) => a + r.discountMargin, 0)
+            return l.length ? <tr><td colSpan={3}>Total · {l.length} invoices</td><Td>{pct(given, g)}</Td><Td>{rs(g)}</Td><Td>{rs(given)}</Td><Td className="hidden lg:table-cell">{rs(item)}</Td><Td className="hidden lg:table-cell">{pct(m, g)}</Td><Td>{rs(m)}</Td><Td className="hidden xl:table-cell">{rs(l.reduce((a, r) => a + r.netTotal, 0))}</Td></tr> : null
+          })()}
+        />
+      )}
       <Filters>
         <SearchBox value={s.search} onChange={(v) => set({ search: v })} placeholder="Invoice no, customer, area…" />
         <select className="input" value={s.images} onChange={(e) => set({ images: e.target.value })} aria-label="Photos">

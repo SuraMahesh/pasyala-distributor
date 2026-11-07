@@ -3,6 +3,7 @@ import { Eye, FileSpreadsheet, Paperclip, Lock, Pencil, Plus, Printer, ScanLine,
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useInRouterContext, useNavigate, useParams } from 'react-router-dom'
 import { rs, type PurchaseInvoice, type PurchaseUsage } from '@pjd/shared'
+import { BreakdownModal, Td } from '../components/BreakdownModal'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
 import InvoiceDocument from '../components/InvoiceDocument'
@@ -43,6 +44,16 @@ export function PurchaseList() {
   const [s, set] = useListState({ from: '', to: '', status: '', supplierId: '', images: '', sort: 'date', dir: 'desc' as const })
   const { data: suppliers = [] } = useSupplierOptions()
   const q = usePaged<PurchaseRow, { count: number; subTotal: number; billDiscount: number; netTotal: number; due: number }>('purchases', '/purchases', s)
+  // the invoice-by-invoice table behind the Bill discount tile (every row of the current filter)
+  const [breakdown, setBreakdown] = useState<{ rows: PurchaseRow[]; loading: boolean } | null>(null)
+  const openBreakdown = async () => {
+    setBreakdown({ rows: [], loading: true })
+    try {
+      setBreakdown({ rows: await fetchAll<PurchaseRow>('/purchases', { ...s, page: undefined, pageSize: undefined }), loading: false })
+    } catch {
+      setBreakdown(null)
+    }
+  }
   const columns: Column<PurchaseRow>[] = [
     { key: 'no', header: 'Invoice no', sortKey: 'invoiceNo', render: (r) => <Link to={`/purchases/${r.id}`} className="font-medium text-brand-700 hover:underline">{r.invoiceNo}</Link> },
     { key: 'photo', header: <Paperclip size={14} aria-label="Photos" />, align: 'center', mobile: false, render: (r) => (r.imageCount ? <span className="inline-flex items-center gap-0.5 text-xs text-brand-700" title={`${r.imageCount} photo(s) of the paper invoice`}><Paperclip size={13} />{r.imageCount > 1 ? r.imageCount : ''}</span> : <span className="text-xs text-stone-300" title="No photo yet">—</span>) },
@@ -79,10 +90,36 @@ export function PurchaseList() {
       />
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Invoices" value={q.data?.summary.count ?? 0} />
-        <Stat label="Bill discount" value={`Rs ${rs(q.data?.summary.billDiscount)}`} hint={q.data?.summary.subTotal ? `of Rs ${rs(q.data.summary.subTotal)} sub total` : undefined} />
+        <Stat label="Bill discount" value={`Rs ${rs(q.data?.summary.billDiscount)}`} hint={q.data?.summary.subTotal ? `of Rs ${rs(q.data.summary.subTotal)} sub total (after the 22% item discount) · tap for the table` : 'tap for the table'} onClick={openBreakdown} />
         <Stat label="Net total" value={`Rs ${rs(q.data?.summary.netTotal)}`} />
         <Stat label="To pay" value={`Rs ${rs(q.data?.summary.due)}`} tone={q.data?.summary.due ? 'warn' : 'default'} />
       </div>
+      {breakdown && (
+        <BreakdownModal<PurchaseRow>
+          title="Bill discount by invoice"
+          subtitle="Sub total = goods after the 22% item discount. The bill discount (8%) is taken off that sub total; the net is what the supplier is paid."
+          rows={breakdown.rows}
+          loading={breakdown.loading}
+          rowKey={(r) => r.id}
+          initialSort={{ key: 'date', dir: 'desc' }}
+          onClose={() => setBreakdown(null)}
+          columns={[
+            { key: 'no', header: 'Invoice', sortKey: 'invoiceNo', sortValue: (r) => r.invoiceNo, render: (r) => <Link to={`/purchases/${r.id}`} className="font-medium text-brand-700 hover:underline">{r.invoiceNo}</Link> },
+            { key: 'date', header: 'Date', sortKey: 'date', sortValue: (r) => r.date, render: (r) => <span className="text-stone-500">{r.date}</span> },
+            { key: 'sup', header: 'Supplier', hideBelow: 'lg', render: (r) => r.partyName },
+            { key: 'sub', header: 'Sub total', align: 'right', sortKey: 'sub', sortValue: (r) => r.subTotal, render: (r) => rs(r.subTotal) },
+            { key: 'pct', header: 'Disc %', align: 'right', render: (r) => `${r.billDiscPct}%` },
+            { key: 'disc', header: 'Bill discount', align: 'right', sortKey: 'disc', sortValue: (r) => r.billDiscount, render: (r) => <span className="font-medium text-brand-700">{rs(r.billDiscount)}</span> },
+            { key: 'net', header: 'Net total', align: 'right', sortKey: 'net', sortValue: (r) => r.netTotal, render: (r) => rs(r.netTotal) },
+          ]}
+          footer={(() => {
+            const l = breakdown.rows
+            const sub = l.reduce((a, r) => a + r.subTotal, 0)
+            const disc = l.reduce((a, r) => a + r.billDiscount, 0)
+            return l.length ? <tr><td colSpan={2}>Total · {l.length} invoices</td><td className="hidden lg:table-cell" /><Td>{rs(sub)}</Td><Td>{sub ? `${((disc / sub) * 100).toFixed(1)}%` : ''}</Td><Td>{rs(disc)}</Td><Td>{rs(l.reduce((a, r) => a + r.netTotal, 0))}</Td></tr> : null
+          })()}
+        />
+      )}
       <Filters>
         <SearchBox value={s.search} onChange={(v) => set({ search: v })} placeholder="Invoice no, order no…" />
         <select className="input" value={s.supplierId} onChange={(e) => set({ supplierId: e.target.value })}>

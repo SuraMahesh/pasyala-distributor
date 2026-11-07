@@ -99,7 +99,7 @@ npm test                                   # shared maths + full API suite (embe
 TEST_DATABASE_URL=postgres://… npm test -w backend   # same suite on a real PostgreSQL database (it is wiped!)
 ```
 
-130 tests (111 backend + 19 shared maths) cover: cheques not yet paid (cheque date as due date, cheque cleared), sales returns (stock back or written off, credit against the invoice, refunds, delete guards, reports net of returns), the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
+132 tests (113 backend + 19 shared maths) cover: the discount margin on the sales list, exchanges with other distributors, cheques not yet paid (cheque date as due date, cheque cleared), sales returns (stock back or written off, credit against the invoice, refunds, delete guards, reports net of returns), the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
 free issues, customer-type / customer / product pricing priority, promotions, invoice numbering, oversell
 protection (and no number used up on failure), edit/delete returning stock, FIFO payment allocation,
 overdue & aging, credit-limit and below-cost warnings, duplicate supplier invoices, adjustments, delete
@@ -118,6 +118,7 @@ protection, pagination and report totals, login/image tokens and rate limits, ta
 | Sale cost / profit | cost per unit is saved on each sales line when the invoice is saved |
 | Invoice due | paid on the invoice is applied to that invoice; separate payments go to the **oldest** unpaid invoices first |
 | Overdue | unpaid after the credit days (customer → customer type) |
+| Discount margin (Sales list) | discount given to the customer (gross − net) less the supplier's item discount on the same goods (22% of gross): 8% of gross for a 30% customer, 13% for 35%. The Purchases list shows the supplier's 8% **bill** discount, which is what funds it — click either figure for the invoice-by-invoice table |
 | Cheque | a cheque marked **Not yet paid** keeps the invoice due and makes it fall due on the cheque date; **Cheque cleared** on the invoice page then marks the invoice paid (on the invoice itself, not a FIFO payment). A cheque marked **Paid** settles the invoice at once. *Sales → Cheque not cleared* lists the cheques still out |
 
 ### Pricing for shops vs medical centers
@@ -133,7 +134,7 @@ Anything can still be changed on the invoice line. The sale is checked against s
 
 Dashboard · Sales invoices (print preview A4/A5) · Sales returns (credit notes) · Shops & customers (types, credit limits, statements) ·
 Prices & discounts (types, price grid, free issues, printable price lists) · Products · Stock (adjustments,
-movements) · Purchases/GRN · Suppliers · Payments · Reports (product, customer, customer type, daily,
+exchanges with other distributors, movements) · Purchases/GRN · Suppliers · Payments · Reports (product, customer, customer type, daily,
 aging) · Settings · Notifications (out/low stock, overdue, over limit, supplier dues, promotions ending).
 
 All lists are paginated on the server (10/25/50/100 per page), sortable, searchable, and turn into cards on phones.

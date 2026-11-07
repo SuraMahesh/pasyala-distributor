@@ -1,0 +1,72 @@
+{
+  "_about": "5 more handwritten Pasyale bill-book sales (photos sent 7 Nov 2026): 189766, 189767, 189769, 189773 of 4 Nov 2026 and 189834 (no date on the paper — assumed 2 Nov 2026, the Polonnaruwa round). Lines carry no discount; the bill discount is the % at the bottom. Bills 189773 and 189834 carry lump-sum RTN (returned goods) deductions on the paper — entered as sold with the return noted (record as a sales return).",
+  "payMethod": "Credit",
+  "customers": [
+    { "code": "MAWANELLA-AYURVEDA", "name": "Mawanella Ayurveda", "typeCode": "PHARMACY", "area": "Mawanella", "discPct": 35 },
+    { "code": "SUBUN-AYURVEDA", "name": "Subun Ayurveda Osusala", "typeCode": "PHARMACY", "discPct": 35, "notes": "Stamp: Subun Ayurveda Osusala (town on the stamp unreadable in the photo)" },
+    { "code": "THILAKA-OSU", "name": "Thilaka Osusala", "typeCode": "PHARMACY", "discPct": 35, "notes": "Name partly illegible on bill 189769 (dark photo); stamp shows No 36 and a 036 phone number. May be the same shop as Thanika Osu (bill 189756) — merge if so" },
+    { "code": "RATHNA-OSU", "name": "Rathna Osu - Ruwanwella", "typeCode": "PHARMACY", "area": "Ruwanwella", "discPct": 30, "notes": "Stamp phone 036-2265545" },
+    { "code": "NEW-LANKA-AYURVEDIC", "name": "New Lanka Ayurvedic - Kaduruwela", "typeCode": "PHARMACY", "area": "Kaduruwela", "discPct": 35, "notes": "Stamp: New Lanka Ayurvedic, No. 07, Main Street, Kaduruwela" }
+  ],
+  "invoices": [
+    {
+      "billNo": "189766", "date": "2026-11-04", "customer": "MAWANELLA-AYURVEDA", "billDiscPct": 35, "payMethod": "Cash", "paid": "full",
+      "written": { "gross": 24090, "netTotal": 15658.5 }, "photos": ["189766-p1.jpg"],
+      "note": "Cash ticked. A second Dasanga lepa 50g x12 line was struck out",
+      "lines": [
+        { "code": "RSDP0100", "size": "100g", "name": "DHATHUPRUSHTI RASAYANA", "written": "Dathu Pushti Rasayana 100g", "qty": 3, "price": 650 },
+        { "code": "THNK0100", "size": "100ML", "name": "NEELA KESHIKA", "written": "Neela keshika 100ml", "qty": 9, "price": 380 },
+        { "code": "LPDL0050", "size": "50g", "name": "DASHANGA LEPA", "written": "Dasanga lepa churnaya 50g", "qty": 12, "price": 500 },
+        { "code": "UNRK0100", "size": "100g", "name": "ROHANEKASH", "written": "Rogan E Khass lepa 100g", "qty": 6, "price": 700 },
+        { "code": "UNRK0050", "size": "50g", "name": "ROHANEKASH", "written": "Rogan E Khass lepa 50g", "qty": 12, "price": 350 },
+        { "code": "UNRK0025", "size": "25g", "name": "ROHANEKASH", "written": "Rogan E Khass lepa 25g", "qty": 24, "price": 180 }
+      ]
+    },
+    {
+      "billNo": "189767", "date": "2026-11-04", "customer": "SUBUN-AYURVEDA", "billDiscPct": 35, "payMethod": "Credit", "paid": 0,
+      "written": { "gross": 12150, "netTotal": 7897.5 }, "photos": ["189767-p1.jpg"],
+      "note": "Payment box unreadable (dark photo) — entered as credit. Handwritten under the net: 1,657.50 and 6,240 (a deduction leaving 6,240 — probably returned goods; not applied)",
+      "lines": [
+        { "code": "THMN0180", "size": "180ML", "name": "MAHA NARAYANA", "written": "Narayana 180ml", "qty": 3, "price": 800 },
+        { "code": "THWV0180", "size": "180ML", "name": "WATHA VIDURANGA", "written": "Watha Viduranga 180ml", "qty": 3, "price": 850 },
+        { "code": "THAS0030", "size": "30ML", "name": "ASHWAGANDA THEL", "written": "Ashwagandha Thel 30ml", "qty": 12, "free": 1, "price": 230 },
+        { "code": "THSP0030", "size": "30ML", "name": "SARSHAPADI", "written": "Sarshapadi Thel 30ml", "qty": 12, "free": 1, "price": 220 },
+        { "code": "NPKP0100", "size": "100g", "name": "KETA KELLA PATHTHUWA", "written": "Ketakela Paththuwa 100g", "qty": 3, "price": 600 }
+      ]
+    },
+    {
+      "billNo": "189769", "date": "2026-11-04", "customer": "THILAKA-OSU", "billDiscPct": 35, "payMethod": "Cash", "paid": "full",
+      "written": { "gross": 7200, "netTotal": 4680 }, "photos": ["189769-p1.jpg"],
+      "note": "Cash ticked, 'Cash Paid' written on the bill",
+      "lines": [
+        { "code": "NPCS-P0100", "size": "100ML", "name": "PAWATTA WELMEE", "written": "Pawatta Velmee 100ml", "qty": 12, "free": 1, "price": 400 },
+        { "code": "THMN0180", "size": "180ML", "name": "MAHA NARAYANA", "written": "Narayana 180ml", "qty": 3, "price": 800 }
+      ]
+    },
+    {
+      "billNo": "189773", "date": "2026-11-04", "customer": "RATHNA-OSU", "billDiscPct": 30, "payMethod": "Credit", "paid": 0,
+      "written": { "gross": 11250, "netTotal": 7875 }, "photos": ["189773-p1.jpg"],
+      "note": "Date on the bill reads 2026.11.3 or .4 (entered as 4 Nov, between bills 189772 and 189774). Payment box unreadable — entered as credit. RTN on the bill: Pawatta 200ml x2 @550, Pawatta 100ml x5 @350, Rohanekash 25g x4 @130 = 3,370 less 30% = 2,359 deducted, leaving 5,516 to pay — record as a sales return",
+      "lines": [
+        { "code": "THST0180", "size": "180ML", "name": "SATYAVADI", "written": "Sathyawadi Thel 180ml", "qty": 3, "price": 1150 },
+        { "code": "THST0030", "size": "30ML", "name": "SATYAVADI", "written": "Sathyawadi 30ml", "qty": 12, "free": 1, "price": 250 },
+        { "code": "NPCS-P0100", "size": "100ML", "name": "PAWATTA WELMEE", "written": "Pawatta Wellmee 100ml", "qty": 12, "free": 1, "price": 400 }
+      ]
+    },
+    {
+      "billNo": "189834", "date": "2026-11-02", "customer": "NEW-LANKA-AYURVEDIC", "billDiscPct": 35, "payMethod": "Cash", "paid": 5811,
+      "written": { "gross": 12360, "netTotal": 8034 }, "photos": ["189834-p1.jpg"],
+      "note": "No date on the bill (assumed 2 Nov 2026, the Polonnaruwa round). Cash ticked. Total return written on the bill: 3,420 less 35% = 2,223 (items not listed); Rs 5,811 paid in cash after the return — record the return as a sales return, which clears the Rs 2,223 balance",
+      "lines": [
+        { "code": "CHSK0050", "size": "50g", "name": "SUKUMARA", "written": "Sukumara Churnaya 50g", "qty": 6, "price": 160 },
+        { "code": "CHSK0100", "size": "100g", "name": "SUKUMARA", "written": "Sukumara 100g", "qty": 3, "price": 280 },
+        { "code": "CHAG0050", "size": "50g", "name": "ASHWAGANDA CHOORNA", "written": "Ashwaganda Churnaya 50g", "qty": 6, "price": 350 },
+        { "code": "CHAG0100", "size": "100g", "name": "ASHWAGANDA CHOORNA", "written": "Ashwaganda Churnaya 100g", "qty": 3, "price": 600 },
+        { "code": "CHBK0050", "size": "50g", "name": "BASKARALAWANA", "written": "Bashkaralawana Churnaya 50g", "qty": 3, "price": 290 },
+        { "code": "CHTH0050", "size": "50g", "name": "THALISADI", "written": "Talisadi Churnaya 50g", "qty": 3, "price": 230 },
+        { "code": "LPLK0050", "size": "50g", "name": "LAKSHADI LEPA", "written": "Lakshadi lepa 50g", "qty": 6, "price": 300 },
+        { "code": "LPLK0100", "size": "100g", "name": "LAKSHADI LEPA", "written": "Lakshadi lepa 100g", "qty": 6, "price": 550 }
+      ]
+    }
+  ]
+}

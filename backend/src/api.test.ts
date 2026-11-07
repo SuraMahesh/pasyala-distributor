@@ -483,6 +483,22 @@ describe('purchases and stock safety', () => {
     expect((await product('TBTR1000')).onHand).toBe(1)
   })
 
+  it('records an exchange with another distributor as stock out and stock in', async () => {
+    const before = (await product('ATCS0030')).onHand
+    const out = await api.post('/api/adjustments').send({ date: today, productId: ids.ATCS0030, qty: -3, reason: 'Exchange with distributor', notes: 'Given to Nimal Osu' })
+    expect(out.status).toBe(201)
+    const back = await api.post('/api/adjustments').send({ date: today, productId: ids.ATGL0030, qty: 2, reason: 'Exchange with distributor', notes: 'Received from Nimal Osu' })
+    expect(back.status).toBe(201)
+    expect((await product('ATCS0030')).onHand).toBe(before - 3)
+    const list = (await api.get('/api/adjustments?reason=Exchange%20with%20distributor&pageSize=50')).body
+    expect(list.items.map((a: { id: number }) => a.id).sort()).toEqual([out.body.id, back.body.id].sort())
+    expect((await api.get('/api/adjustments?reason=Damage&pageSize=50')).body.items.map((a: { id: number }) => a.id)).not.toContain(out.body.id)
+    const moves = (await api.get(`/api/products/${ids.ATGL0030}/movements`)).body.items
+    expect(moves[0]).toMatchObject({ type: 'Adjustment', ref: 'Exchange with distributor', party: 'Received from Nimal Osu', qtyIn: 2 })
+    for (const id of [out.body.id, back.body.id]) expect((await api.delete(`/api/adjustments/${id}`)).status).toBe(200)
+    expect((await product('ATCS0030')).onHand).toBe(before)
+  })
+
   it('allows negative stock only when switched on in settings', async () => {
     const s = (await api.get('/api/settings')).body
     await api.put('/api/settings').send({ ...s, allowNegativeStock: true })
@@ -533,6 +549,23 @@ describe('lists, pagination and reports', () => {
     expect(s.profit).toBeCloseTo(sales.summary.profit - returns.summary.netTotal + returnedCost, 2)
     const byType = (await api.get(`/api/reports/by-type?from=${from}&to=${today}`)).body
     expect(byType.reduce((a: number, t: { revenue: number }) => a + t.revenue, 0)).toBeCloseTo(s.revenue, 2)
+  })
+
+  it('the sales list shows the discount margin: discount given less the supplier item discount (22%)', async () => {
+    const list = (await api.get('/api/sales?pageSize=200')).body
+    const opts = (await api.get('/api/products/options')).body as { id: number; supplierDiscPct: number }[]
+    const disc = new Map(opts.map((p) => [p.id, p.supplierDiscPct]))
+    expect(list.items.length).toBeGreaterThan(2)
+    for (const row of list.items.slice(0, 6)) {
+      const inv = (await api.get(`/api/sales/${row.id}`)).body
+      const item = inv.lines.reduce((s: number, l: { qty: number; unitPrice: number; productId: number }) => s + (l.qty * l.unitPrice * (disc.get(l.productId) ?? 0)) / 100, 0)
+      expect(row.gross).toBe(inv.gross)
+      expect(row.itemDiscount).toBeCloseTo(item, 2)
+      expect(row.discountGiven).toBeCloseTo(inv.gross - inv.netTotal, 2)
+      expect(row.discountMargin).toBeCloseTo(inv.gross - inv.netTotal - item, 2)
+    }
+    expect(list.summary.discountMargin).toBeCloseTo(list.items.reduce((s: number, r: { discountMargin: number }) => s + r.discountMargin, 0), 2)
+    expect(list.summary.discountGiven).toBeCloseTo(list.summary.gross - list.summary.netTotal, 2)
   })
 
   it('returns 404 / 400 for bad ids', async () => {

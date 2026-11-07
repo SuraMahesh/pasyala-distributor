@@ -18,7 +18,8 @@ export type PayMethod = (typeof PAY_METHODS)[number]
 export const RETURN_REASONS = ['Damaged', 'Expired', 'Wrong item', 'Unsold stock', 'Other'] as const
 export type ReturnReason = (typeof RETURN_REASONS)[number]
 
-export const ADJ_REASONS = ['Count correction', 'Damage', 'Expired', 'Return', 'Sample', 'Other'] as const
+/** 'Exchange with distributor' = goods swapped with another Pasyale distributor: a negative qty is what we handed over, a positive qty what we got */
+export const ADJ_REASONS = ['Count correction', 'Damage', 'Expired', 'Return', 'Sample', 'Exchange with distributor', 'Other'] as const
 export type AdjReason = (typeof ADJ_REASONS)[number]
 
 export interface Paged<T> {
