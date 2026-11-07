@@ -18,6 +18,25 @@
   body {
     @apply bg-stone-100 text-stone-800 antialiased;
   }
+  /* everything that can be clicked shows the hand (Tailwind 4 resets buttons to the arrow) */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  a[href],
+  summary,
+  select:not(:disabled),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='file']:not(:disabled),
+  label:has(> input[type='checkbox']:not(:disabled)),
+  label:has(> input[type='radio']:not(:disabled)) {
+    cursor: pointer;
+  }
+  button:disabled,
+  select:disabled,
+  input:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
+  }
   input[type='number']::-webkit-inner-spin-button {
     opacity: 0.4;
   }

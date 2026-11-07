@@ -118,7 +118,7 @@ export default function Layout() {
       {/* mobile / tablet drawer */}
       {open && (
         <div className="no-print fixed inset-0 z-40 lg:hidden" onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 bg-stone-900/40" />
+          <div className="absolute inset-0 cursor-pointer bg-stone-900/40" aria-hidden="true" />
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-brand-900 pb-[env(safe-area-inset-bottom)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between pr-3">
               {brand}

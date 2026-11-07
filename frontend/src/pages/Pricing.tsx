@@ -75,7 +75,7 @@ function TypesTab() {
         <button className="btn-primary" onClick={() => setEditing({ id: 0, code: '', name: '', defaultDiscPct: 0, creditDays: 30, sort: types.length + 1 })}><Plus size={16} /> Add customer type</button>
       </div>
       <ClientTable rows={types} columns={columns} rowKey={(t) => t.id} mobileCard={(t) => (
-        <div className="flex items-center justify-between gap-3" onClick={() => setEditing(t)}>
+        <div className="flex cursor-pointer items-center justify-between gap-3" onClick={() => setEditing(t)}>
           <div><p className="font-medium">{t.name}</p><p className="text-xs text-stone-500">{t.customerCount} customers · {t.creditDays} credit days</p></div>
           <Badge tone={t.defaultDiscPct ? 'green' : 'gray'}>{t.defaultDiscPct}% off</Badge>
         </div>
@@ -318,7 +318,7 @@ function PromotionsTab() {
       </div>
       {q.isLoading ? <Spinner /> : (
         <ClientTable rows={q.data ?? []} columns={columns} rowKey={(p) => p.id} empty="No free-issue deals yet. Example: buy 12 bottles, get 1 free for shops." mobileCard={(p) => (
-          <div className="flex items-center justify-between gap-2" onClick={() => setEditing(p)}>
+          <div className="flex cursor-pointer items-center justify-between gap-2" onClick={() => setEditing(p)}>
             <div className="min-w-0"><p className="truncate font-medium">{p.productLabel}</p><p className="text-xs text-stone-500">Buy {p.buyQty} get {p.freeQty} · {p.typeName ?? 'all types'}</p></div>
             <Badge tone={state(p)[1]}>{state(p)[0]}</Badge>
           </div>

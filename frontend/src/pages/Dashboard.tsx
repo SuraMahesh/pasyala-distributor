@@ -399,7 +399,7 @@ function SalesChart({ data }: { data: DashboardData['last30'] }) {
                   />
                 )}
                 {/* bigger hit target than the bar */}
-                <rect x={padL + i * slot} y={0} width={slot} height={H - padB} fill="transparent" onMouseEnter={() => setHover(i)} onClick={() => setHover(i)} />
+                <rect x={padL + i * slot} y={0} width={slot} height={H - padB} fill="transparent" className="cursor-pointer" onMouseEnter={() => setHover(i)} onClick={() => setHover(i)} />
                 {(isToday || ((data.length - 1 - i) % every === 0 && data.length - 1 - i >= every)) && (
                   <text x={isToday ? x + barW : x + barW / 2} y={H - 6} textAnchor={isToday ? 'end' : 'middle'} fontSize="10" fill="#78716c">{isToday ? 'Today' : dayLabel(d.date)}</text>
                 )}
