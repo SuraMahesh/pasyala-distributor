@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -89,11 +89,21 @@ export function useListState<F extends Record<string, string>>(defaults: { pageS
   return [state, set] as const
 }
 
+/** params whose change keeps the rows on screen (dimmed) while the next page loads: paging, sorting and the search box */
+const KEEP_ROWS_KEYS = new Set(['page', 'pageSize', 'sort', 'dir', 'search'])
+const sameFilters = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+  [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !KEEP_ROWS_KEYS.has(k)).every((k) => String(a[k] ?? '') === String(b[k] ?? ''))
+
 export function usePaged<T, S = Record<string, number>>(key: string, path: string, params: Record<string, string | number | undefined>) {
   return useQuery({
     queryKey: [key, 'list', params],
     queryFn: () => api.get<Paged<T> & { summary: S }>(path, params),
-    placeholderData: keepPreviousData,
+    // turning a page or re-sorting keeps the old rows (dimmed) until the new ones arrive; choosing a filter option
+    // shows the loading state instead, so rows that no longer match the selection are never on screen
+    placeholderData: (prev, prevQuery) => {
+      const prevParams = prevQuery?.queryKey[2] as Record<string, unknown> | undefined
+      return prev && prevParams && sameFilters(prevParams, params) ? prev : undefined
+    },
   })
 }
 

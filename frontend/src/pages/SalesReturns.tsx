@@ -88,10 +88,10 @@ export function ReturnList() {
         }
       />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Returns" value={qtyFmt(sum?.count)} hint={`${qtyFmt(sum?.units)} units`} />
-        <Stat label="Returned value" value={`Rs ${rs(sum?.netTotal)}`} />
-        <Stat label="Refunded in cash" value={`Rs ${rs(sum?.refunded)}`} tone={sum?.refunded ? 'warn' : 'default'} />
-        <Stat label="Credited to accounts" value={`Rs ${rs(sum?.credited)}`} tone="good" />
+        <Stat label="Returns" value={sum ? qtyFmt(sum.count) : '…'} hint={`${qtyFmt(sum?.units)} units`} />
+        <Stat label="Returned value" value={sum ? `Rs ${rs(sum.netTotal)}` : '…'} />
+        <Stat label="Refunded in cash" value={sum ? `Rs ${rs(sum.refunded)}` : '…'} tone={sum?.refunded ? 'warn' : 'default'} />
+        <Stat label="Credited to accounts" value={sum ? `Rs ${rs(sum.credited)}` : '…'} tone="good" />
       </div>
       <Filters>
         <SearchBox value={s.search} onChange={(v) => set({ search: v })} placeholder="Return no, customer, invoice…" />

@@ -1,9 +1,10 @@
+import { FileSpreadsheet } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { ClientTable, type Column } from './DataTable'
 import { Modal, Spinner } from './ui'
 
 /** A figure's invoice-by-invoice table in a window (opened by clicking a Stat tile). */
-export function BreakdownModal<T>({ title, subtitle, columns, rows, rowKey, footer, totals, loading, initialSort, onClose }: {
+export function BreakdownModal<T>({ title, subtitle, columns, rows, rowKey, footer, totals, loading, initialSort, onExcel, onClose }: {
   title: string
   subtitle?: ReactNode
   columns: Column<T>[]
@@ -15,6 +16,8 @@ export function BreakdownModal<T>({ title, subtitle, columns, rows, rowKey, foot
   totals?: { label: string; value: ReactNode }[]
   loading?: boolean
   initialSort?: { key: string; dir: 'asc' | 'desc' }
+  /** downloads the rows of the window as an Excel file */
+  onExcel?: () => void | Promise<void>
   onClose: () => void
 }) {
   const mobileFooter = totals?.length ? (
@@ -28,7 +31,18 @@ export function BreakdownModal<T>({ title, subtitle, columns, rows, rowKey, foot
     </dl>
   ) : undefined
   return (
-    <Modal open onClose={onClose} title={title} size="xl">
+    <Modal
+      open
+      onClose={onClose}
+      title={title}
+      size="xl"
+      footer={onExcel ? (
+        <>
+          <button type="button" className="btn-secondary" onClick={() => void onExcel()} disabled={loading || rows.length === 0}><FileSpreadsheet size={16} /> Excel</button>
+          <button type="button" className="btn-primary" onClick={onClose}>Close</button>
+        </>
+      ) : undefined}
+    >
       {subtitle && <div className="mb-3 text-sm text-stone-500">{subtitle}</div>}
       {loading ? <Spinner /> : <ClientTable rows={rows} columns={columns} rowKey={rowKey} footer={footer} mobileFooter={mobileFooter} initialPageSize={25} initialSort={initialSort} empty="Nothing in this selection." />}
     </Modal>

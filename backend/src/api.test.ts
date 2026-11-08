@@ -158,6 +158,20 @@ describe('sales invoices', () => {
     ids.sale3 = res.body.id
   })
 
+  it('filters the list by payment method', async () => {
+    const credit = (await api.get('/api/sales?payMethod=Credit&pageSize=200')).body
+    expect(credit.items.length).toBeGreaterThan(0)
+    expect(credit.items.every((i: { payMethod: string }) => i.payMethod === 'Credit')).toBe(true)
+    expect(credit.items.map((i: { id: number }) => i.id)).toContain(ids.sale1)
+    const cash = (await api.get('/api/sales?payMethod=Cash&pageSize=200')).body
+    expect(cash.items.map((i: { id: number }) => i.id)).toContain(ids.sale3)
+    expect(cash.items.map((i: { id: number }) => i.id)).not.toContain(ids.sale1)
+    const all = (await api.get('/api/sales?pageSize=200')).body
+    expect(credit.summary.count + cash.summary.count).toBe(all.summary.count) // no cheques or transfers yet
+    expect(credit.summary.netTotal + cash.summary.netTotal).toBeCloseTo(all.summary.netTotal, 2)
+    expect((await api.get('/api/sales?payMethod=Nope')).status).toBe(400)
+  })
+
   it('refuses to oversell and does not use up an invoice number', async () => {
     const before = (await api.get('/api/settings')).body.nextInvoiceNo
     const res = await api.post('/api/sales').send({ date: today, customerId: ids.shop, payMethod: 'Cash', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [line('RSDH1000', 51)] })

@@ -44,7 +44,7 @@ Set `DATABASE_URL`, `PORT` in `backend/.env` (or the environment). Put it behind
 To host the frontend separately (Netlify, Vercel …) set `VITE_API_URL` when building it and `CORS_ORIGIN` on the API.
 
 **Backups:** `pg_dump -Fc pjd_erp > pjd_erp-$(date +%F).dump` daily (restore with `pg_restore`).
-Settings → *Download full Excel export* gives a readable copy too (one sheet per table).
+Settings → *Download full Excel export* gives a readable copy too (one sheet per table). The list pages (Sales, Returns, Purchases, Stock, Products, Payments, Parties, Reports) each have an **Excel** button that downloads what is shown (every page of the current filter), and the Net sales, Discount margin and Stock amount windows download their tables the same way. The Sales list also has a checkbox column: tick invoices (or *select all on this page*) to see their net, paid, due and gross profit in a bar above the table and download just those rows.
 
 Set `APP_PASSWORD` to require a password (always do this on a public server; 8+ characters).
 
@@ -99,7 +99,7 @@ npm test                                   # shared maths + full API suite (embe
 TEST_DATABASE_URL=postgres://… npm test -w backend   # same suite on a real PostgreSQL database (it is wiped!)
 ```
 
-134 tests (115 backend + 19 shared maths) cover: the supplier bill discount on the sales list, sale costs on charged units only (free items at Rs 0 on both sides) and the re-cost command, the discount margin on the sales list, exchanges with other distributors, cheques not yet paid (cheque date as due date, cheque cleared), sales returns (stock back or written off, credit against the invoice, refunds, delete guards, reports net of returns), the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
+136 tests (117 backend + 19 shared maths) cover: the payment-method filter on the sales list, the RTN goods on a bill entered as sales returns by the importer, the supplier bill discount on the sales list, sale costs on charged units only (free items at Rs 0 on both sides) and the re-cost command, the discount margin on the sales list, exchanges with other distributors, cheques not yet paid (cheque date as due date, cheque cleared), sales returns (stock back or written off, credit against the invoice, refunds, delete guards, reports net of returns), the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
 free issues, customer-type / customer / product pricing priority, promotions, invoice numbering, oversell
 protection (and no number used up on failure), edit/delete returning stock, FIFO payment allocation,
 overdue & aging, credit-limit and below-cost warnings, duplicate supplier invoices, adjustments, delete
@@ -114,13 +114,14 @@ protection, pagination and report totals, login/image tokens and rate limits, ta
 | Net total | sub total − bill discount % |
 | Landed cost / unit | line net × (1 − bill disc %) ÷ paid qty — 71.76% of list at 22% + 8%. Free issues cost Rs 0: they add stock and never dilute this price |
 | Stock on hand | opening + purchased (incl. free) − sold (incl. free) + returned by customers (restocked) ± adjustments |
+| Stock amount (Stock page) | charged units on hand × the unit price on the GRN they came from, less that GRN's line (22%) and bill (8%) discounts; free units count in the quantity at Rs 0; stock is taken oldest first so what is on hand is the newest refills — click the Amount tile for the ladder (at list → less discounts → stock amount, plus the value at selling prices) and the item-by-item table |
 | Sales return | priced as sold; comes off the customer's balance (the invoice it names first, else the oldest unpaid), less any cash refunded; sales reports are net of returns |
 | Sale cost / profit | charged units × the paid unit price; free items are outside the margin maths on both sides (free issues received cost Rs 0, free units given to a shop cost Rs 0 — they only move stock). The unit cost is saved on each sales line when the invoice is saved; `npm run db:recost-sales -- --apply` (from `backend/`) re-costs older invoices at today's paid unit price |
 | Invoice due | paid on the invoice is applied to that invoice; separate payments go to the **oldest** unpaid invoices first |
 | Overdue | unpaid after the credit days (customer → customer type) |
 | Net sales (Sales list) | the invoice totals after the customers' discounts: gross (list × qty) less the discount given. Payments do not change it (Paid / Due show what has been collected); returns are credited against the invoice, and Reports shows sales net of returns — click the figure for the ladder (total at list price → less the supplier's 22% item discount → less the supplier's 8% bill discount on the remainder, giving the goods at the supplier's net price → less the discount given → net sales) and the invoice-by-invoice table with the same columns plus paid and due. The 8% is the bill discount on the newest GRN |
 | Discount margin (Sales list) | discount given to the customer (gross − net) less the supplier's item discount on the same goods (22% of gross): 8% of gross for a 30% customer, 13% for 35%. The Purchases list shows the supplier's 8% **bill** discount, which is what funds it — click either figure for the invoice-by-invoice table |
-| Cheque | a cheque marked **Not yet paid** keeps the invoice due and makes it fall due on the cheque date; **Cheque cleared** on the invoice page then marks the invoice paid (on the invoice itself, not a FIFO payment). A cheque marked **Paid** settles the invoice at once. *Sales → Cheque not cleared* lists the cheques still out |
+| Cheque | a cheque marked **Not yet paid** keeps the invoice due and makes it fall due on the cheque date; **Cheque cleared** on the invoice page then marks the invoice paid (on the invoice itself, not a FIFO payment). A cheque marked **Paid** settles the invoice at once. *Sales → Cheque not cleared* lists the cheques still out, and the **payment method** filter next to it shows only the credit (on account), cash, cheque or bank-transfer sales |
 
 ### Pricing for shops vs medical centers
 
@@ -208,7 +209,10 @@ Handwritten **sales** bills work the same way with `npm run db:import-sales -- s
 (preview, then `--apply`, optionally `--photos <dir>`): customers in the file are matched by code or a similar name
 and created when new, products must already exist, every bill must reproduce its written gross and net totals, the
 stock that would leave is shown against what is on hand, and the ERP gives each sale its own PJD number (the paper
-bill number is kept in the invoice notes).
+bill number is kept in the invoice notes). A bill can carry a `return` block — the "RTN" goods the shop handed back
+on the same visit, with their written gross and credit — which goes in as a sales return of the same date (stock
+back on the shelf, the credit off the shop's balance), so a later bill in the file can sell what an earlier one
+took back. See `sales-2026-11-04b.json` (bill 189773).
 
 ## Invoice photos
 

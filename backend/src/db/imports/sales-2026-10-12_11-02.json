@@ -163,7 +163,17 @@
         { "code": "THPN0030", "size": "30ML", "name": "PINDA", "written": "Pinda", "qty": 12, "price": 200 },
         { "code": "THMS0030", "size": "30ML", "name": "MAHASIDDRTHA", "written": "Siddartha", "qty": 12, "price": 200 },
         { "code": "KLNW0010", "size": "10g", "name": "NAWARATHNA KALKA", "written": "Nawarathna kalkaya", "qty": 12, "price": 150 }
-      ] },
+      ],
+      "return": {
+        "reason": "Unsold stock",
+        "written": { "gross": 4530, "netTotal": 2944.5 },
+        "note": "Return credited on the bill: 2 x 450ml Medasamani @950, 1 x 200g Ashwaganda Grutha @1430, 2 x 100g Maha Sudarshana churna @600 = 4,530 less 35% = 2,944.50; the invoice's Rs 2,944.50 due is this credit. Ashwaganda Grutha 200g is not an ERP item yet — add it and run again; verify the Sudarshana match",
+        "lines": [
+          { "code": "NPMS0450", "size": "450ML", "name": "MEDASAMANI", "written": "RTN - Medasamani 450ml", "qty": 2, "price": 950 },
+          { "code": "UNKNOWN-ASHWAGANDA-GRUTHA", "size": "200g", "name": "ASHWAGANDA GRUTHA", "written": "RTN - Ashwaganda Grutha 200g (not identified)", "qty": 1, "price": 1430 },
+          { "code": "CHSU0100", "size": "100g", "name": "SUDARSHANA CHOORNA", "written": "RTN - Maha Sudarshana churna 100g (verify: the ERP item is Sudarshana choorna)", "qty": 2, "price": 600 }
+        ]
+      } },
     { "billNo": "189833", "date": "2026-10-27", "customer": "OJANA-OSU", "billDiscPct": 30, "payMethod": "Cash", "paid": "full",
       "written": { "gross": 7550, "netTotal": 5285 }, "photos": ["189833-p1.jpg"], "note": "Dr Ojuna; bill closed, cash paid 27/10/2026",
       "lines": [

@@ -1,4 +1,5 @@
-// Enters handwritten sales bills transcribed into a JSON file (see src/db/imports/) as sales invoices.
+// Enters handwritten sales bills transcribed into a JSON file (see src/db/imports/) as sales invoices; the
+// "RTN" goods a bill carries (its `return` block) go in as sales returns of the same date.
 //
 //   npm run db:import-sales -- src/db/imports/sales-2026-10.json                         preview only
 //   npm run db:import-sales -- src/db/imports/sales-2026-10.json --apply                 write
@@ -74,9 +75,20 @@ function print(r: SalesImportReport) {
   const skipped = r.invoices.filter((i) => i.status === 'skipped')
   if (skipped.length) console.log(`  ${skipped.length} skipped (net Rs ${rs(skipped.reduce((s, i) => s + i.netTotal, 0))}) — fix the cause and run again`)
 
+  if (r.returns.length) {
+    console.log(`\nReturns on the bills (${r.returns.length}) — entered as sales returns of the same date:`)
+    for (const t of r.returns) {
+      const state =
+        t.status === 'new' ? (r.apply ? `saved as ${t.returnNo} (#${t.id})` : 'NEW — matches the bill') : t.status === 'skipped' ? `SKIPPED — ${t.why}` : `already entered as ${t.returnNo} (${t.why}) — skipped`
+      console.log(`  bill ${pad(t.billNo, 8)} ${t.date}  ${pad(t.customer, 26)} ${String(t.lines).padStart(3)} lines  ${String(t.units).padStart(5)} + ${String(t.freeUnits).padStart(3)} free   gross ${money(t.gross)}   credit ${money(t.netTotal)}   ${t.restock ? 'back on the shelf' : 'written off'}   ${state}`)
+    }
+    const fresh = r.returns.filter((t) => t.status === 'new')
+    if (fresh.length) console.log(`  ${fresh.length} new: Rs ${rs(fresh.reduce((s, t) => s + t.netTotal, 0))} credited to the customers' balances`)
+  }
+
   if (r.stock.length) {
-    console.log(`\nStock leaving (${r.stock.length} items):`)
-    for (const s of r.stock) console.log(`  ${pad(s.code, 12)} ${pad(s.size, 6)} ${pad(s.name, 32)} on hand ${String(s.onHand).padStart(5)}  −${String(s.units).padStart(4)}  → ${String(s.after).padStart(5)}${s.after < 0 ? '  SHORT' : ''}`)
+    console.log(`\nStock leaving with the bills / coming back with the returns (${r.stock.length} items):`)
+    for (const s of r.stock) console.log(`  ${pad(s.code, 12)} ${pad(s.size, 6)} ${pad(s.name, 32)} on hand ${String(s.onHand).padStart(5)}  −${String(s.units).padStart(4)}  ${s.back ? `+${String(s.back).padStart(3)} back` : '         '}  → ${String(s.after).padStart(5)}${s.after < 0 ? '  SHORT' : ''}`)
   }
 
   if (r.warnings.length) {
@@ -85,7 +97,7 @@ function print(r: SalesImportReport) {
   }
   const missing = r.invoices.filter((i) => i.photos.length && i.photosAttached < i.photos.length)
   if (r.apply && photosDir && missing.length) console.log(`\n${missing.length} invoice(s) still have photos to attach — fix the cause above and run the same command again.`)
-  console.log(r.apply ? '\nDone.' : '\nPREVIEW ONLY — nothing was written. Add --apply to enter these invoices.')
+  console.log(r.apply ? '\nDone.' : '\nPREVIEW ONLY — nothing was written. Add --apply to enter these invoices and returns.')
 }
 
 const data = JSON.parse(await readFile(file, 'utf8')) as SalesImportFile

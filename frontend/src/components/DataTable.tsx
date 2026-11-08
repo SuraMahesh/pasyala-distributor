@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Inbox } from 'lucide-react'
-import { type ReactNode, useId, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Empty, ErrorBox } from './ui'
 
@@ -17,6 +17,14 @@ export interface Column<T> {
   hideBelow?: 'lg' | 'xl' | '2xl'
   /** leave out of the default mobile card */
   mobile?: boolean
+}
+
+/** row selection (checkbox column): the page tells which rows are selected and reacts to toggles */
+export interface Selection<T> {
+  isSelected: (row: T) => boolean
+  onToggle: (row: T, checked: boolean) => void
+  /** the header / phone checkbox: every row on this page at once */
+  onToggleAll: (rows: T[], checked: boolean) => void
 }
 
 export interface DataTableProps<T> {
@@ -42,7 +50,20 @@ export interface DataTableProps<T> {
   footer?: ReactNode
   /** totals (or any summary) shown under the cards on phones, where the table footer is not rendered */
   mobileFooter?: ReactNode
+  /** adds a select / unselect checkbox as the first column (a `footer` row must then span one more cell) */
+  selection?: Selection<T>
   pageSizes?: number[]
+}
+
+const CHECK = 'h-4 w-4 shrink-0 cursor-pointer accent-brand-700'
+
+function SelectAll<T>({ rows, selection }: { rows: T[]; selection: Selection<T> }) {
+  const n = rows.filter(selection.isSelected).length
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = n > 0 && n < rows.length
+  }, [n, rows.length])
+  return <input ref={ref} type="checkbox" className={CHECK} checked={rows.length > 0 && n === rows.length} disabled={!rows.length} onChange={(e) => selection.onToggleAll(rows, e.target.checked)} aria-label="Select all rows on this page" />
 }
 
 const alignCls = (a?: string) => (a === 'right' ? 'text-right' : a === 'center' ? 'text-center' : 'text-left')
@@ -53,7 +74,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
   const sortId = useId()
   const {
     rows, columns, rowKey, loading, error, onRetry, empty, page, pageSize, total, onPage, onPageSize,
-    sort, dir = 'asc', onSort, rowLink, rowClassName, mobileCard, footer, mobileFooter, pageSizes = [10, 25, 50, 100],
+    sort, dir = 'asc', onSort, rowLink, rowClassName, mobileCard, footer, mobileFooter, selection, pageSizes = [10, 25, 50, 100],
   } = p
 
   if (error) return <ErrorBox error={error} onRetry={onRetry} />
@@ -78,9 +99,15 @@ export function DataTable<T>(p: DataTableProps<T>) {
   return (
     <div className="card overflow-hidden">
       <div className={`relative ${loading ? 'opacity-60 transition-opacity' : ''}`}>
-        {/* phones: a sort control (the sortable table header is hidden here) */}
-        {onSort && columns.some((c) => c.sortKey) && (
+        {/* phones: select-all and a sort control (the table header is hidden here) */}
+        {(selection || (onSort && columns.some((c) => c.sortKey))) && (
           <div className="flex items-center justify-end gap-1 border-b border-stone-100 px-3 py-1.5 text-xs text-stone-500 md:hidden">
+            {selection && (
+              <label className="mr-auto flex min-h-9 items-center gap-2 pl-1">
+                <SelectAll rows={rows} selection={selection} /> Select all on this page
+              </label>
+            )}
+            {onSort && columns.some((c) => c.sortKey) && <>
             <label htmlFor={sortId}>Sort</label>
             <select id={sortId} className="min-h-9 rounded-md border border-stone-200 bg-white px-2 py-1.5 text-xs" value={sort ?? ''} onChange={(e) => e.target.value && onSort(e.target.value, dir)}>
               {!sort && <option value="">Default</option>}
@@ -89,6 +116,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
             <button className="btn-ghost min-h-9 min-w-9" aria-label={dir === 'asc' ? 'Ascending — switch to descending' : 'Descending — switch to ascending'} disabled={!sort} onClick={() => sort && onSort(sort, dir === 'asc' ? 'desc' : 'asc')}>
               {dir === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
             </button>
+            </>}
           </div>
         )}
         {/* phones: cards */}
@@ -96,10 +124,13 @@ export function DataTable<T>(p: DataTableProps<T>) {
           {rows.map((row) => (
             <li
               key={rowKey(row)}
-              className={`px-4 py-3 ${rowLink ? 'cursor-pointer active:bg-brand-50' : ''} ${rowClassName?.(row) ?? ''}`}
+              className={`px-4 py-3 ${selection ? 'flex items-start gap-3' : ''} ${rowLink ? 'cursor-pointer active:bg-brand-50' : ''} ${selection?.isSelected(row) ? 'bg-brand-50/60' : ''} ${rowClassName?.(row) ?? ''}`}
               onClick={() => go(row)}
             >
-              {mobileCard ? mobileCard(row) : <DefaultCard row={row} columns={columns} />}
+              {selection && (
+                <input type="checkbox" className={`${CHECK} mt-1`} checked={selection.isSelected(row)} onChange={(e) => selection.onToggle(row, e.target.checked)} onClick={(e) => e.stopPropagation()} aria-label="Select row" />
+              )}
+              <div className="min-w-0 flex-1">{mobileCard ? mobileCard(row) : <DefaultCard row={row} columns={columns} />}</div>
             </li>
           ))}
           {mobileFooter && rows.length > 0 && <li className="bg-stone-50 px-4 py-3 font-medium">{mobileFooter}</li>}
@@ -110,6 +141,7 @@ export function DataTable<T>(p: DataTableProps<T>) {
           <table className="table">
             <thead>
               <tr>
+                {selection && <th className="w-8 pr-0"><SelectAll rows={rows} selection={selection} /></th>}
                 {columns.map((c) => (
                   <th key={c.key} className={`${alignCls(c.align)} ${hideCls(c.hideBelow)} ${c.className ?? ''}`}>{header(c)}</th>
                 ))}
@@ -117,10 +149,13 @@ export function DataTable<T>(p: DataTableProps<T>) {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={rowKey(row)} className={`${rowLink ? 'cursor-pointer' : ''} ${rowClassName?.(row) ?? ''}`} onClick={(e) => {
+                <tr key={rowKey(row)} className={`${rowLink ? 'cursor-pointer' : ''} ${selection?.isSelected(row) ? 'bg-brand-50/60' : ''} ${rowClassName?.(row) ?? ''}`} onClick={(e) => {
                   if ((e.target as HTMLElement).closest('a,button,input,select,label')) return
                   go(row)
                 }}>
+                  {selection && (
+                    <td className="w-8 pr-0"><input type="checkbox" className={CHECK} checked={selection.isSelected(row)} onChange={(e) => selection.onToggle(row, e.target.checked)} aria-label="Select row" /></td>
+                  )}
                   {columns.map((c) => (
                     <td key={c.key} className={`${alignCls(c.align)} ${c.align === 'right' ? 'tabular-nums' : ''} ${hideCls(c.hideBelow)} ${c.className ?? ''}`}>{c.render(row)}</td>
                   ))}

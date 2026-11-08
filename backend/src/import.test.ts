@@ -281,6 +281,60 @@ describe('import of the handwritten sales bills', () => {
     expect(r.invoices[0].why).toMatch(/same customer, date and net total/)
   })
 
+  it('the RTN lines on a bill go in as a sales return of the same date: stock back, the credit off the balance', async () => {
+    const { customerDues } = await import('./services/dues')
+    const sold = sales.invoices[1].lines[0] // 30ML CHANDANADI (ATCS0030), sold on 183808
+    const bill: SalesImportFile['invoices'][number] = {
+      billNo: '183810', date: '2026-10-16', customer: 'JAYASRI-OSU', billDiscPct: 35, paid: 0, written: { gross: 2000, netTotal: 1300 },
+      lines: [{ ...sold, qty: 10, free: 0 }],
+      return: { written: { gross: 600, netTotal: 390 }, note: 'unsold, handed back on the visit', lines: [{ ...sold, qty: 3, free: 0 }] },
+    }
+    const file = { ...sales, invoices: [bill] }
+    const [jaya] = await rows<{ id: number }>(database.db, sql`select id from customers where code = 'JAYASRI-OSU'`)
+    const balanceBefore = (await customerDues(database.db)).get(jaya.id).balance
+    const onHand = async () => [...(await stockMap(database.db)).values()].find((s) => s.label.includes('ATCS0030'))!.onHand
+    const onHandBefore = await onHand()
+
+    const preview = await importSales(database.db, file)
+    expect(preview.invoices[0].status).toBe('new')
+    expect(preview.returns).toHaveLength(1)
+    expect(preview.returns[0]).toMatchObject({ billNo: '183810', status: 'new', lines: 1, units: 3, freeUnits: 0, gross: 600, billDiscount: 210, netTotal: 390, restock: true })
+    expect(preview.stock.find((s) => s.code === 'ATCS0030')).toMatchObject({ units: 10, back: 3, after: onHandBefore - 7 })
+    expect(await count('sales_returns')).toBe(0)
+
+    // a return that does not add up stops the file; an unknown item skips the return only, the sale still goes ahead
+    const bad = structuredClone(file)
+    bad.invoices[0].return!.lines[0].qty = 4
+    await expect(importSales(database.db, bad)).rejects.toThrow(/Bill 183810 \(return\): the lines add up to/)
+    const unknown = structuredClone(file)
+    unknown.invoices[0].return!.lines[0] = { code: 'NOPE0001', size: '1L', name: 'NOTHING', qty: 3, price: 200 }
+    const ru = await importSales(database.db, unknown)
+    expect(ru.invoices[0].status).toBe('new')
+    expect(ru.returns[0].status).toBe('skipped')
+    expect(ru.returns[0].why).toMatch(/not in Products: NOPE0001/)
+
+    const r = await importSales(database.db, file, { apply: true })
+    expect(r.invoices[0].invoiceNo).toBe('PJD-000004')
+    expect(r.returns[0]).toMatchObject({ status: 'new', returnNo: 'PJD-R000001' })
+    expect(await count('sales_returns')).toBe(1)
+    const [ret] = await rows<{ customer_id: number; sales_invoice_id: number | null; net_total: number; restock: boolean; notes: string; reason: string }>(
+      database.db,
+      sql`select customer_id, sales_invoice_id, net_total, restock, notes, reason from sales_returns`,
+    )
+    expect(ret).toMatchObject({ customer_id: jaya.id, sales_invoice_id: null, restock: true, reason: 'Unsold stock' })
+    expect(Number(ret.net_total)).toBe(390)
+    expect(ret.notes).toContain('Bill No 183810')
+    expect(ret.notes).toContain('handed back on the visit')
+    expect(await onHand()).toBe(onHandBefore - 7)
+    expect((await customerDues(database.db)).get(jaya.id).balance).toBeCloseTo(balanceBefore + 1300 - 390, 2)
+
+    // running it again changes nothing
+    const again = await importSales(database.db, file, { apply: true })
+    expect(again.invoices[0].status).toBe('already entered')
+    expect(again.returns[0]).toMatchObject({ status: 'already entered', returnNo: 'PJD-R000001' })
+    expect(await count('sales_returns')).toBe(1)
+  })
+
   it('reads PNG sizes and rejects other files', () => {
     const png = Buffer.alloc(33)
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png)

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import {
   adjustmentSchema,
   listQuerySchema,
+  PAY_METHODS,
   paymentSchema,
   purchaseInvoiceSchema,
   round2,
@@ -38,6 +39,7 @@ const dateRange = {
 }
 const statusFilter = z.enum(['', 'paid', 'due', 'overdue', 'cheque']).default('') // cheque = paid by cheque, cheque not cleared yet
 const imagesFilter = z.enum(['', 'has', 'none']).default('')
+const payMethodFilter = z.enum(['', ...PAY_METHODS]).default('')
 const byImages = <T extends { imageCount: number }>(items: T[], f: string) => (f === 'has' ? items.filter((i) => i.imageCount > 0) : f === 'none' ? items.filter((i) => i.imageCount === 0) : items)
 
 const invoiceSorters = {
@@ -57,7 +59,7 @@ export function transactionRoutes(db: DB) {
 
   // ---------------- sales
   r.get('/sales', async (req, res) => {
-    const q = listQuerySchema.extend({ ...dateRange, customerId: z.coerce.number().int().optional(), typeId: z.coerce.number().int().optional(), status: statusFilter, images: imagesFilter }).parse(req.query)
+    const q = listQuerySchema.extend({ ...dateRange, customerId: z.coerce.number().int().optional(), typeId: z.coerce.number().int().optional(), status: statusFilter, images: imagesFilter, payMethod: payMethodFilter }).parse(req.query)
     const where: SQL[] = []
     if (q.from) where.push(gte(salesInvoices.date, q.from))
     if (q.to) where.push(lte(salesInvoices.date, q.to))
@@ -98,6 +100,7 @@ export function transactionRoutes(db: DB) {
     if (q.status === 'due') items = items.filter((i) => i.status !== 'paid')
     if (q.status === 'overdue') items = items.filter((i) => i.overdue)
     if (q.status === 'cheque') items = items.filter((i) => i.payMethod === 'Cheque' && i.status !== 'paid')
+    if (q.payMethod) items = items.filter((i) => i.payMethod === q.payMethod)
     items = byImages(items, q.images)
     const { filtered, ...page } = paginate(items, q, {
       search: (i) => `${i.invoiceNo} ${i.partyName} ${i.area} ${i.typeName} ${i.chequeNo}`,

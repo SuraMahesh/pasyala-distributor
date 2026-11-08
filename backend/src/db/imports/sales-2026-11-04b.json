@@ -51,7 +51,17 @@
         { "code": "THST0180", "size": "180ML", "name": "SATYAVADI", "written": "Sathyawadi Thel 180ml", "qty": 3, "price": 1150 },
         { "code": "THST0030", "size": "30ML", "name": "SATYAVADI", "written": "Sathyawadi 30ml", "qty": 12, "free": 1, "price": 250 },
         { "code": "NPCS-P0100", "size": "100ML", "name": "PAWATTA WELMEE", "written": "Pawatta Wellmee 100ml", "qty": 12, "free": 1, "price": 400 }
-      ]
+      ],
+      "return": {
+        "reason": "Unsold stock",
+        "written": { "gross": 3370, "netTotal": 2359 },
+        "note": "RTN lines on the bill: 2 x 200ml Pawatta @550, 5 x 100ml Pawatta @350, 4 x 25g Rogan-e-kash @130 (credited at the prices written; the 25g lists at 180 now) = 3,370 less 30% = 2,359, leaving 5,516 to pay",
+        "lines": [
+          { "code": "NPCS-P0200", "size": "200ML", "name": "PAWATTA WELMEE", "written": "RTN - Pawatta 200ml", "qty": 2, "price": 550 },
+          { "code": "NPCS-P0100", "size": "100ML", "name": "PAWATTA WELMEE", "written": "RTN - Pawatta 100ml", "qty": 5, "price": 350 },
+          { "code": "UNRK0025", "size": "25g", "name": "ROHANEKASH", "written": "RTN - Rooganikash 25g", "qty": 4, "price": 130 }
+        ]
+      }
     },
     {
       "billNo": "189834", "date": "2026-11-02", "customer": "NEW-LANKA-AYURVEDIC", "billDiscPct": 35, "payMethod": "Cash", "paid": 5811,

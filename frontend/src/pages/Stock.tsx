@@ -1,7 +1,8 @@
 import { ArrowLeftRight, FileSpreadsheet, SlidersHorizontal, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ADJ_REASONS, rs, todayLK, type AdjReason, type ProductWithStock } from '@pjd/shared'
+import { BreakdownModal, Td } from '../components/BreakdownModal'
 import Combobox from '../components/Combobox'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
@@ -59,6 +60,33 @@ function StockTable({ s, set }: { s: ListState[0]; set: ListState[1] }) {
   const q = usePaged<ProductWithStock, { units: number; paidUnits: number; freeUnits: number; grossValue: number; discountValue: number; costValue: number; sellValue: number; low: number; out: number }>('products', '/products', params)
   const { data: meta } = useProductMeta()
   const sum = q.data?.summary
+  // the item-by-item table behind the Amount tile (every row of the current filter)
+  const [breakdown, setBreakdown] = useState<{ rows: ProductWithStock[]; loading: boolean } | null>(null)
+  const openBreakdown = async () => {
+    setBreakdown({ rows: [], loading: true })
+    try {
+      setBreakdown({ rows: await fetchAll<ProductWithStock>('/products', { ...params, page: undefined, pageSize: undefined }), loading: false })
+    } catch {
+      setBreakdown(null)
+    }
+  }
+  const bt = useMemo(() => {
+    if (!breakdown) return null
+    const add = (f: (p: ProductWithStock) => number) => breakdown.rows.reduce((a, p) => a + f(p), 0)
+    const gross = add((p) => n(p.grossValue))
+    const disc = add((p) => n(p.discountValue))
+    return {
+      items: breakdown.rows.length,
+      charged: add(chargedQty),
+      free: add(freeQty),
+      gross,
+      disc,
+      amount: add((p) => n(p.stockValue)),
+      sell: add((p) => Math.max(n(p.onHand), 0) * n(p.sellPrice)),
+      mixed: breakdown.rows.filter((p) => p.mixedDisc).length,
+      pct: gross ? `${((disc / gross) * 100).toFixed(2)}%` : '',
+    }
+  }, [breakdown])
 
   const exportExcel = async () => {
     const all = await fetchAll<ProductWithStock>('/products', { ...params, page: undefined, pageSize: undefined })
@@ -103,9 +131,61 @@ function StockTable({ s, set }: { s: ListState[0]; set: ListState[1] }) {
   return (
     <>
       <div className="mb-4 grid grid-cols-2 gap-3">
-        <Stat label="Total qty" value={sum?.units ?? 0} hint={`${sum?.paidUnits ?? 0} + ${sum?.freeUnits ?? 0} free · ${q.data?.total ?? 0} items`} />
-        <Stat label="Amount" value={`Rs ${rs(sum?.costValue)}`} tone="good" hint={`after discount · ${sum?.low ?? 0} low · ${sum?.out ?? 0} out of stock`} />
+        <Stat label="Total qty" value={sum ? sum.units : '…'} hint={`${sum?.paidUnits ?? 0} + ${sum?.freeUnits ?? 0} free · ${q.data?.total ?? 0} items`} />
+        <Stat label="Amount" value={sum ? `Rs ${rs(sum.costValue)}` : '…'} tone="good" hint={`after discount · ${sum?.low ?? 0} low · ${sum?.out ?? 0} out of stock · tap for the table`} onClick={openBreakdown} />
       </div>
+      {breakdown && bt && (
+        <BreakdownModal<ProductWithStock>
+          title="Stock amount by item"
+          subtitle={<>
+            {!breakdown.loading && bt.items > 0 && (
+              <dl className="mb-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 rounded-md bg-stone-50 p-3 text-stone-700 sm:grid-cols-[1fr_auto_auto]">
+                <dt>Charged units on hand × unit price (at list) · {bt.items} items</dt><dd className="text-right font-medium tabular-nums">Rs {rs(bt.gross)}</dd><dd className="col-span-2 text-right text-xs text-stone-500 sm:col-span-1 sm:text-sm">{bt.charged} charged units</dd>
+                <dt className="text-stone-500">less the supplier's discounts on those GRNs (line 22% + bill 8%)</dt><dd className="text-right tabular-nums text-stone-500">− Rs {rs(bt.disc)}</dd><dd className="col-span-2 text-right text-xs text-stone-500 sm:col-span-1 sm:text-sm">{bt.pct} of list</dd>
+                <dt className="font-semibold text-stone-900">Stock amount (what the stock cost)</dt><dd className="text-right font-semibold tabular-nums text-brand-700">Rs {rs(bt.amount)}</dd><dd className="col-span-2 text-right text-xs text-stone-500 sm:col-span-1 sm:text-sm">+ {bt.free} free units at Rs 0</dd>
+                <dt className="text-stone-500">at the selling prices (all units)</dt><dd className="text-right tabular-nums text-stone-500">Rs {rs(bt.sell)}</dd><dd className="hidden sm:block" />
+              </dl>
+            )}
+            <b>Amount</b> is what the stock on hand cost: the charged units × the unit price on the GRN they came from, less that GRN's line discount (22%) and bill discount (8%).
+            Free units count in the quantity but are worth Rs 0. Stock is taken oldest first, so what is on hand is the newest refills, each at its own price and discounts — <b>mixed</b> means refills at different terms (the Excel's "Stock by GRN" sheet lists them).
+          </>}
+          rows={breakdown.rows}
+          loading={breakdown.loading}
+          rowKey={(p) => p.id}
+          initialSort={{ key: 'stockValue', dir: 'desc' }}
+          onClose={() => setBreakdown(null)}
+          columns={[
+            { key: 'item', header: 'Item', sortKey: 'name', sortValue: (p) => `${p.name} ${p.size}`, render: (p) => <Link to={`/products/${p.id}`} className="font-medium text-brand-700 hover:underline"><span className="text-stone-500">{p.size}</span> {p.name}</Link> },
+            { key: 'code', header: 'Code', hideBelow: 'xl', mobile: false, render: (p) => <span className="font-mono text-xs text-stone-600">{p.code}</span> },
+            { key: 'charged', header: 'Charged qty', align: 'right', sortKey: 'charged', sortValue: chargedQty, render: (p) => chargedQty(p) },
+            { key: 'free', header: 'Free qty', align: 'right', hideBelow: 'lg', sortKey: 'free', sortValue: freeQty, render: (p) => (freeQty(p) ? <span className="text-brand-700">{freeQty(p)}</span> : <span className="text-stone-300">—</span>) },
+            { key: 'price', header: 'Unit price', align: 'right', hideBelow: 'lg', sortKey: 'price', sortValue: (p) => p.listPrice, render: (p) => rs(p.listPrice) },
+            { key: 'gross', header: 'At list', align: 'right', sortKey: 'gross', sortValue: (p) => n(p.grossValue), render: (p) => rs(n(p.grossValue)) },
+            { key: 'disc', header: 'Disc', align: 'right', hideBelow: 'xl', render: (p) => <span className="whitespace-nowrap text-stone-600" title={batchText(p)}>{discLabel(p)}</span> },
+            { key: 'discount', header: 'Discount', align: 'right', sortKey: 'discount', sortValue: (p) => n(p.discountValue), render: (p) => <span className="text-stone-500">{rs(n(p.discountValue))}</span> },
+            { key: 'amount', header: 'Amount', align: 'right', sortKey: 'stockValue', sortValue: (p) => n(p.stockValue), render: (p) => <span className="font-semibold text-brand-700">{rs(n(p.stockValue))}</span> },
+          ]}
+          footer={bt.items ? <tr><td>Total · {bt.items} items</td><td className="hidden xl:table-cell" /><Td>{bt.charged}</Td><Td className="hidden lg:table-cell">{bt.free}</Td><td className="hidden lg:table-cell" /><Td>{rs(bt.gross)}</Td><Td className="hidden xl:table-cell">{bt.pct}</Td><Td>{rs(bt.disc)}</Td><Td className="text-brand-700">{rs(bt.amount)}</Td></tr> : null}
+          onExcel={() => downloadExcel('stock-amount', [{
+            name: 'Stock amount by item',
+            columns: [
+              { header: 'Code' }, { header: 'Size' }, { header: 'Name' }, { header: 'Charged qty', type: 'int' }, { header: 'Free qty', type: 'int' },
+              { header: 'Unit price', type: 'money' }, { header: 'At list', type: 'money' }, { header: 'Disc' }, { header: 'Discount', type: 'money' }, { header: 'Amount', type: 'money' },
+            ],
+            rows: breakdown.rows.map((p) => [p.code, p.size, p.name, chargedQty(p), freeQty(p), p.listPrice, n(p.grossValue), discLabel(p), n(p.discountValue), n(p.stockValue)]),
+            totals: [3, 4, 6, 8, 9],
+          }])}
+          totals={[
+            { label: 'Items', value: bt.items },
+            { label: 'Charged units', value: bt.charged },
+            { label: 'Free units (Rs 0)', value: bt.free },
+            { label: 'At list', value: `Rs ${rs(bt.gross)}` },
+            { label: `Discount (${bt.pct})`, value: `− Rs ${rs(bt.disc)}` },
+            { label: 'Stock amount', value: <span className="font-semibold text-brand-700">Rs {rs(bt.amount)}</span> },
+            { label: 'At selling prices', value: `Rs ${rs(bt.sell)}` },
+          ]}
+        />
+      )}
       <Filters>
         <SearchBox value={s.search} onChange={(v) => set({ search: v })} />
         <select className="input" value={s.stock} onChange={(e) => set({ stock: e.target.value })}>

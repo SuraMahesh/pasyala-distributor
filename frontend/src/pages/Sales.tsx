@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
-import { Eye, FileSpreadsheet, Paperclip, Pencil, Plus, Printer, ScanLine, Trash2, Undo2, Wallet } from 'lucide-react'
+import { Eye, FileSpreadsheet, Paperclip, Pencil, Plus, Printer, ScanLine, Trash2, Undo2, Wallet, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { qtyFmt, rs, type SalesInvoice } from '@pjd/shared'
+import { PAY_METHODS, qtyFmt, rs, type SalesInvoice } from '@pjd/shared'
 import { BreakdownModal, Td } from '../components/BreakdownModal'
 import { useConfirm } from '../components/Confirm'
-import { DataTable, type Column } from '../components/DataTable'
+import { DataTable, type Column, type Selection } from '../components/DataTable'
 import InvoiceDocument from '../components/InvoiceDocument'
 import InvoiceImages from '../components/InvoiceImages'
 import InvoiceEditor, { blankLine, emptyDraft, payMethodLabel, type Draft } from '../components/InvoiceEditor'
@@ -51,7 +51,7 @@ interface SaleRow {
 }
 
 export function SalesList() {
-  const [s, set] = useListState({ from: '', to: '', status: '', typeId: '', customerId: '', images: '', sort: 'date', dir: 'desc' as const })
+  const [s, set] = useListState({ from: '', to: '', status: '', payMethod: '', typeId: '', customerId: '', images: '', sort: 'date', dir: 'desc' as const })
   const { data: types = [] } = useCustomerTypes()
   const { data: customers = [] } = useCustomerOptions()
   const q = usePaged<SaleRow, { count: number; netTotal: number; due: number; profit: number; gross: number; discountGiven: number; itemDiscount: number; discountMargin: number; supplierBillDiscPct: number; supplierBillDiscount: number }>('sales', '/sales', s)
@@ -79,9 +79,8 @@ export function SalesList() {
     { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} overdue={r.overdue} /> },
   ]
 
-  const exportExcel = async () => {
-    const all = await fetchAll<SaleRow>('/sales', { ...s, page: undefined, pageSize: undefined })
-    await downloadExcel('sales', [{
+  const exportRows = (all: SaleRow[], fileBase: string) =>
+    downloadExcel(fileBase, [{
       name: 'Sales invoices',
       columns: [
         { header: 'Invoice' }, { header: 'Date', type: 'date' }, { header: 'Customer' }, { header: 'Customer type' }, { header: 'Area' },
@@ -92,7 +91,20 @@ export function SalesList() {
       rows: all.map((r) => [r.invoiceNo, r.date, r.partyName, r.typeName, r.area, r.payMethod, r.gross, r.billDiscPct, r.discountGiven, r.itemDiscount, r.discountMargin, r.netTotal, r.costTotal, r.netTotal - r.costTotal, r.paid, r.due, r.overdue ? 'Overdue' : r.status === 'paid' ? 'Paid' : r.status === 'partial' ? 'Part paid' : 'Unpaid', r.dueDate, r.chequeNo, r.chequeDate]),
       totals: [6, 8, 9, 10, 11, 12, 13, 14, 15],
     }])
+  const exportExcel = async () => exportRows(await fetchAll<SaleRow>('/sales', { ...s, page: undefined, pageSize: undefined }), 'sales')
+
+  // selected rows (the first column's checkboxes) — kept across pages until cleared
+  const [picked, setPicked] = useState<Map<number, SaleRow>>(() => new Map())
+  const selection: Selection<SaleRow> = {
+    isSelected: (r) => picked.has(r.id),
+    onToggle: (r, on) => setPicked((m) => { const next = new Map(m); if (on) next.set(r.id, r); else next.delete(r.id); return next }),
+    onToggleAll: (rows, on) => setPicked((m) => { const next = new Map(m); for (const r of rows) if (on) next.set(r.id, r); else next.delete(r.id); return next }),
   }
+  const sel = useMemo(() => {
+    const l = [...picked.values()]
+    const add = (f: (r: SaleRow) => number) => l.reduce((a, r) => a + f(r), 0)
+    return { n: l.length, gross: add((r) => r.gross), net: add((r) => r.netTotal), profit: add((r) => r.netTotal - r.costTotal), paid: add((r) => r.paid), due: add((r) => r.due) }
+  }, [picked])
 
   const sum = q.data?.summary
   // totals of the rows behind the Net sales table: list price → after the supplier's 22% → after the customer's discount
@@ -114,7 +126,6 @@ export function SalesList() {
         subtitle="Sales to shops, medical centers and walk-in customers"
         actions={
           <>
-            <button className="btn-secondary" onClick={exportExcel}><FileSpreadsheet size={16} /> Excel</button>
             <Link to="/sales/returns" className="btn-secondary"><Undo2 size={16} /> Returns</Link>
             <Link to="/sales/new" className="btn-secondary"><ScanLine size={16} /> Scan invoice image</Link>
             <Link to="/sales/new" className="btn-primary"><Plus size={16} /> New sale</Link>
@@ -122,11 +133,11 @@ export function SalesList() {
         }
       />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Stat label="Invoices" value={qtyFmt(sum?.count)} />
-        <Stat label="Net sales" value={`Rs ${rs(sum?.netTotal)}`} hint={sum?.gross ? `gross Rs ${rs(sum.gross)} less Rs ${rs(sum.discountGiven)} discounts · tap for the table` : 'what customers were billed after discounts · tap for the table'} onClick={() => openBreakdown('net')} />
-        <Stat label="Discount margin" value={`Rs ${rs(sum?.discountMargin)}`} hint={sum?.gross ? `${pct(sum.discountMargin, sum.gross)} of gross · customer discount less the 22% item discount · tap for the table` : 'customer discount less the 22% item discount'} onClick={() => openBreakdown('margin')} />
-        <Stat label="Gross profit" value={`Rs ${rs(sum?.profit)}`} tone="good" />
-        <Stat label="Still to collect" value={`Rs ${rs(sum?.due)}`} tone={sum?.due ? 'warn' : 'default'} />
+        <Stat label="Invoices" value={sum ? qtyFmt(sum.count) : '…'} />
+        <Stat label="Net sales" value={sum ? `Rs ${rs(sum.netTotal)}` : '…'} hint={sum?.gross ? `gross Rs ${rs(sum.gross)} less Rs ${rs(sum.discountGiven)} discounts · tap for the table` : 'what customers were billed after discounts · tap for the table'} onClick={() => openBreakdown('net')} />
+        <Stat label="Discount margin" value={sum ? `Rs ${rs(sum.discountMargin)}` : '…'} hint={sum?.gross ? `${pct(sum.discountMargin, sum.gross)} of gross · customer discount less the 22% item discount · tap for the table` : 'customer discount less the 22% item discount'} onClick={() => openBreakdown('margin')} />
+        <Stat label="Gross profit" value={sum ? `Rs ${rs(sum.profit)}` : '…'} tone="good" />
+        <Stat label="Still to collect" value={sum ? `Rs ${rs(sum.due)}` : '…'} tone={sum?.due ? 'warn' : 'default'} />
       </div>
       {breakdown?.kind === 'net' && bt && (
         <BreakdownModal<SaleRow>
@@ -165,6 +176,16 @@ export function SalesList() {
             { key: 'due', header: 'Due', align: 'right', sortKey: 'due', sortValue: (r) => r.due, render: (r) => (r.due > 0 ? <span className={r.overdue ? 'text-red-600' : 'text-amber-600'}>{rs(r.due)}</span> : <span className="text-stone-300">—</span>) },
           ]}
           footer={bt.n ? <tr><td colSpan={3}>Total · {bt.n} invoices</td><Td>{rs(bt.g)}</Td><Td className="hidden xl:table-cell">{rs(bt.item)}</Td><Td className="hidden xl:table-cell">{rs(bt.bill)}</Td><Td className="hidden lg:table-cell">{rs(bt.after)}</Td><Td className="hidden xl:table-cell">{pct(bt.given, bt.g)}</Td><Td>{rs(bt.given)}</Td><Td className="text-brand-700">{rs(bt.net)}</Td><Td className="hidden xl:table-cell">{rs(bt.paid)}</Td><Td>{rs(bt.due)}</Td></tr> : null}
+          onExcel={() => downloadExcel('sales-net', [{
+            name: 'Net sales by invoice',
+            columns: [
+              { header: 'Invoice' }, { header: 'Date', type: 'date' }, { header: 'Customer' }, { header: 'Customer type' }, { header: 'Method' },
+              { header: 'Gross (list)', type: 'money' }, { header: 'Item discount 22%', type: 'money' }, { header: `Bill discount ${bt.billPct}%`, type: 'money' }, { header: `After 22% + ${bt.billPct}%`, type: 'money' },
+              { header: 'Disc %', type: 'pct' }, { header: 'Discount given', type: 'money' }, { header: 'Net sales', type: 'money' }, { header: 'Paid', type: 'money' }, { header: 'Due', type: 'money' },
+            ],
+            rows: breakdown.rows.map((r) => [r.invoiceNo, r.date, r.partyName, r.typeName, payMethodLabel(r.payMethod), r.gross, r.itemDiscount, r.supplierBillDiscount, r.gross - r.itemDiscount - r.supplierBillDiscount, r.gross ? (r.discountGiven / r.gross) * 100 : null, r.discountGiven, r.netTotal, r.paid, r.due]),
+            totals: [5, 6, 7, 8, 10, 11, 12, 13],
+          }])}
           totals={[
             { label: 'Invoices', value: bt.n },
             { label: 'Gross (list, before discounts)', value: `Rs ${rs(bt.g)}` },
@@ -207,6 +228,15 @@ export function SalesList() {
             const m = l.reduce((a, r) => a + r.discountMargin, 0)
             return l.length ? <tr><td colSpan={3}>Total · {l.length} invoices</td><Td>{pct(given, g)}</Td><Td>{rs(g)}</Td><Td>{rs(given)}</Td><Td className="hidden lg:table-cell">{rs(item)}</Td><Td className="hidden lg:table-cell">{pct(m, g)}</Td><Td>{rs(m)}</Td><Td className="hidden xl:table-cell">{rs(l.reduce((a, r) => a + r.netTotal, 0))}</Td></tr> : null
           })()}
+          onExcel={() => downloadExcel('sales-discount-margin', [{
+            name: 'Discount margin by invoice',
+            columns: [
+              { header: 'Invoice' }, { header: 'Date', type: 'date' }, { header: 'Customer' }, { header: 'Disc %', type: 'pct' }, { header: 'Gross', type: 'money' },
+              { header: 'Discount given', type: 'money' }, { header: 'Item discount 22%', type: 'money' }, { header: 'Margin %', type: 'pct' }, { header: 'Discount margin', type: 'money' }, { header: 'Net', type: 'money' },
+            ],
+            rows: breakdown.rows.map((r) => [r.invoiceNo, r.date, r.partyName, r.gross ? (r.discountGiven / r.gross) * 100 : null, r.gross, r.discountGiven, r.itemDiscount, r.gross ? (r.discountMargin / r.gross) * 100 : null, r.discountMargin, r.netTotal]),
+            totals: [4, 5, 6, 8, 9],
+          }])}
           totals={(() => {
             const l = breakdown.rows
             const g = l.reduce((a, r) => a + r.gross, 0)
@@ -238,6 +268,10 @@ export function SalesList() {
           <option value="cheque">Cheque not cleared</option>
           <option value="paid">Paid</option>
         </select>
+        <select className="input" value={s.payMethod} onChange={(e) => set({ payMethod: e.target.value })} aria-label="Payment method">
+          <option value="">All payment methods</option>
+          {PAY_METHODS.map((m) => <option key={m} value={m}>{m === 'Credit' ? 'Credit (on account)' : m}</option>)}
+        </select>
         <select className="input" value={s.typeId} onChange={(e) => set({ typeId: e.target.value })}>
           <option value="">All customer types</option>
           {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -251,7 +285,22 @@ export function SalesList() {
           <span className="text-stone-400">to</span>
           <input type="date" className="input" value={s.to} onChange={(e) => set({ to: e.target.value })} aria-label="To date" />
         </div>
+        <button className="btn-secondary" onClick={exportExcel} title="Download the sales shown (every page of the current filter) as an Excel file"><FileSpreadsheet size={16} /> Excel</button>
       </Filters>
+      {sel.n > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-stone-700">
+          <span className="font-semibold text-stone-900">{sel.n} selected</span>
+          <span>net <b className="tabular-nums">Rs {rs(sel.net)}</b></span>
+          <span className="hidden sm:inline">gross <span className="tabular-nums">Rs {rs(sel.gross)}</span></span>
+          <span>paid <span className="tabular-nums">Rs {rs(sel.paid)}</span></span>
+          <span>due <b className={`tabular-nums ${sel.due > 0 ? 'text-amber-700' : ''}`}>Rs {rs(sel.due)}</b></span>
+          <span className="hidden sm:inline">gross profit <span className="tabular-nums">Rs {rs(sel.profit)}</span></span>
+          <div className="ml-auto flex gap-2">
+            <button className="btn-secondary min-h-9" onClick={() => exportRows([...picked.values()].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id), 'sales-selected')}><FileSpreadsheet size={15} /> Excel (selected)</button>
+            <button className="btn-ghost min-h-9" onClick={() => setPicked(new Map())}><X size={15} /> Unselect all</button>
+          </div>
+        </div>
+      )}
       <DataTable
         rows={q.data?.items ?? []}
         columns={columns}
@@ -259,6 +308,7 @@ export function SalesList() {
         loading={q.isFetching}
         error={q.error}
         onRetry={() => q.refetch()}
+        selection={selection}
         page={q.data?.page ?? s.page}
         pageSize={s.pageSize}
         total={q.data?.total ?? 0}

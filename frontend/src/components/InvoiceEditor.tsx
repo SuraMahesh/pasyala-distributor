@@ -61,6 +61,14 @@ let seq = 0
 const newKey = () => `l${++seq}-${Date.now()}`
 export const blankLine = (): DraftLine => ({ key: newKey(), productId: null, qty: 1, freeQty: 0, unitPrice: 0, discPct: 0 })
 
+/** moves the keyboard to a line's Qty box (after an item is picked) so the row stays selected and the qty can be typed at once */
+const focusQty = (key: string) =>
+  requestAnimationFrame(() => {
+    const el = document.querySelector<HTMLInputElement>(`[data-line="${key}"] input[aria-label="Qty"]`)
+    el?.focus()
+    el?.select()
+  })
+
 export function emptyDraft(mode: 'sale' | 'purchase'): Draft {
   return {
     partyId: null,
@@ -382,14 +390,17 @@ export default function InvoiceEditor({
             const below = belowCost.includes(l)
             const err = errors[`line${l.key}`]
             return (
-              <li key={l.key} className="px-3 py-3 md:py-2" data-error={!!err}>
+              <li key={l.key} className="px-3 py-3 transition-colors focus-within:bg-brand-50/60 md:py-2" data-error={!!err} data-line={l.key}>
                 <div className="grid grid-cols-4 items-start gap-2 md:grid-cols-[1.5rem_minmax(120px,1fr)_3.5rem_3.75rem_3.75rem_5.5rem_3.75rem_5.5rem_2rem] md:items-center md:gap-1.5 xl:grid-cols-[1.75rem_minmax(200px,1fr)_4.5rem_4.5rem_4rem_6.5rem_4.5rem_7rem_2.25rem] xl:gap-2">
                   <span className="hidden text-sm text-stone-400 md:block">{i + 1}</span>
                   <div className="col-span-3 md:col-span-1">
                     <Combobox
                       items={products.filter((x) => x.active || x.id === l.productId)}
                       value={l.productId}
-                      onChange={(id) => setLine(l.key, l.imageText ? { productId: id } : { productId: id, manualPrice: false, manualFree: false }, true)}
+                      onChange={(id) => {
+                        setLine(l.key, l.imageText ? { productId: id } : { productId: id, manualPrice: false, manualFree: false }, true)
+                        focusQty(l.key)
+                      }}
                       getId={(x) => x.id}
                       getLabel={productLabel}
                       getSearch={(x) => `${x.code} ${x.size} ${x.name}`}
