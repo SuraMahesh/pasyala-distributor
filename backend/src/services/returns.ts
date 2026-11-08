@@ -97,7 +97,7 @@ export async function saveReturn(db: DB, input: SalesReturnInput, id?: number): 
     )
     await assertStockAvailable(tx, deltas, existing ? 'change this return' : undefined)
 
-    // cost of the goods coming back: as on the invoice they were sold on, else today's average cost
+    // cost of the charged units coming back: as on the invoice they were sold on, else today's paid unit price; free units Rs 0
     const stock = await stockMap(tx, productIds)
     const lineRows = input.lines.map((l, i) => ({
       lineNo: i + 1,
@@ -121,7 +121,7 @@ export async function saveReturn(db: DB, input: SalesReturnInput, id?: number): 
       subTotal: totals.subTotal,
       billDiscount: totals.billDiscount,
       netTotal: totals.netTotal,
-      costTotal: round2(lineRows.reduce((s, l) => s + l.unitCost * (l.qty + l.freeQty), 0)),
+      costTotal: round2(lineRows.reduce((s, l) => s + l.unitCost * l.qty, 0)),
       refunded: input.refunded,
       refundMethod: input.refunded > 0 ? input.refundMethod : '',
       notes: input.notes,

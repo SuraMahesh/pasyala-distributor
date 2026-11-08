@@ -17,6 +17,7 @@ interface StockRow {
   list_price: number
   supplier_disc_pct: number
   purchased: number
+  purchased_paid: number
   cost_sum: number
   free_in: number
   gross_in: number
@@ -30,8 +31,9 @@ interface StockRow {
 
 /**
  * On hand = opening + purchased (incl. free) − sold (incl. free) + returned by customers (back on the shelf) + adjustments.
- * Avg cost = weighted landed cost of opening stock (at list − supplier disc) and every purchase
- * (line net after bill discount, spread over paid + free units).
+ * avgCost = cost of one PAID unit: opening stock at list − supplier disc, purchases at line net after the bill
+ * discount, divided by the PAID units only. Free items live in the stock records only: free issues received are
+ * Rs 0 and never dilute the unit price, free units given to customers cost Rs 0 (see saleCosts).
  */
 export async function stockMap(ex: Executor, productIds?: number[]) {
   const where = productIds?.length
@@ -41,14 +43,14 @@ export async function stockMap(ex: Executor, productIds?: number[]) {
     ex,
     sql`
     select p.id, p.code, p.name, p.size, p.opening_stock, p.list_price, p.supplier_disc_pct,
-      coalesce(pu.qty, 0)::int as purchased, coalesce(pu.cost, 0) as cost_sum,
+      coalesce(pu.qty, 0)::int as purchased, coalesce(pu.paid, 0)::int as purchased_paid, coalesce(pu.cost, 0) as cost_sum,
       coalesce(pu.free_in, 0)::int as free_in, coalesce(pu.gross, 0) as gross_in,
       case when pu.gross > 0 then pu.line_disc_w / pu.gross end as line_disc,
       case when pu.gross > 0 then pu.bill_disc_w / pu.gross end as bill_disc,
       coalesce(sa.qty, 0)::int as sold, coalesce(sa.free_out, 0)::int as free_out, coalesce(rt.qty, 0)::int as returned, coalesce(ad.qty, 0)::int as adjusted
     from products p
     left join (
-      select pl.product_id, sum(pl.qty + pl.free_qty) as qty,
+      select pl.product_id, sum(pl.qty + pl.free_qty) as qty, sum(pl.qty) as paid,
              sum(pl.line_net * (1 - pi.bill_disc_pct / 100)) as cost,
              sum(pl.free_qty) as free_in,
              sum(pl.qty * pl.unit_price) as gross,
@@ -69,16 +71,20 @@ export async function stockMap(ex: Executor, productIds?: number[]) {
   const map = new Map<number, ProductStock & { label: string }>()
   for (const r of list) {
     const fallback = Number(r.list_price) * (1 - Number(r.supplier_disc_pct) / 100)
-    const units = r.opening_stock + r.purchased
-    const avgCost = units > 0 ? (r.opening_stock * fallback + Number(r.cost_sum)) / units : fallback
+    const paidUnits = r.opening_stock + r.purchased_paid
+    const avgCost = paidUnits > 0 ? (r.opening_stock * fallback + Number(r.cost_sum)) / paidUnits : fallback
+    const onHand = r.opening_stock + r.purchased - r.sold + r.returned + r.adjusted
+    const freeOnHand = Math.min(Math.max(onHand, 0), Math.max(r.free_in - r.free_out, 0))
     map.set(r.id, {
       opening: r.opening_stock,
       purchased: r.purchased,
       sold: r.sold,
       adjusted: r.adjusted,
       returned: r.returned,
-      onHand: r.opening_stock + r.purchased - r.sold + r.returned + r.adjusted,
+      onHand,
       avgCost: Math.round(avgCost * 10000) / 10000,
+      paidOnHand: Math.max(onHand, 0) - freeOnHand,
+      freeOnHand,
       freeIn: r.free_in,
       freeOut: r.free_out,
       lineDiscPct: r.line_disc == null ? Number(r.supplier_disc_pct) : Math.round(Number(r.line_disc) * 100) / 100,
@@ -87,6 +93,18 @@ export async function stockMap(ex: Executor, productIds?: number[]) {
     })
   }
   return map
+}
+
+/**
+ * Cost of each line of a sale: the CHARGED units at the paid unit price (list − supplier discounts). Free items stay
+ * out of the margin maths on both sides — free issues received cost Rs 0 and never dilute the unit price, free units
+ * given to a customer cost Rs 0 — they only move stock. `unitCost` is per charged unit, `cost` = qty × unitCost.
+ */
+export function saleCosts<L extends { productId: number; qty: number }>(lines: L[], stock: Map<number, ProductStock>): { unitCost: number; cost: number }[] {
+  return lines.map((l) => {
+    const unitCost = stock.get(l.productId)?.avgCost ?? 0
+    return { unitCost, cost: Math.round(l.qty * unitCost * 100) / 100 }
+  })
 }
 
 async function allowNegativeStock(ex: Executor) {

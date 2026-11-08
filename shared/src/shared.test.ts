@@ -29,10 +29,11 @@ describe('invoice maths', () => {
     expect(t.lineDiscount).toBe(11319)
   })
 
-  it('landed cost spreads free units and bill discount', () => {
-    // 12 paid + 1 free at 200 less 22% less 8%
-    expect(landedUnitCost({ qty: 12, freeQty: 1, unitPrice: 200, discPct: 22 }, 8)).toBeCloseTo((1872 * 0.92) / 13, 6)
-    expect(landedUnitCost({ qty: 0, freeQty: 0, unitPrice: 200, discPct: 0 }, 0)).toBe(0)
+  it('landed cost is the paid price per paid unit; free issues add nothing', () => {
+    // 12 paid + 1 free at 200 less 22% less 8%: each paid unit costs 143.52 (71.76% of list), the free one Rs 0
+    expect(landedUnitCost({ qty: 12, freeQty: 1, unitPrice: 200, discPct: 22 }, 8)).toBeCloseTo((1872 * 0.92) / 12, 6)
+    expect(landedUnitCost({ qty: 12, freeQty: 1, unitPrice: 200, discPct: 22 }, 8)).toBeCloseTo(200 * 0.7176, 6)
+    expect(landedUnitCost({ qty: 0, freeQty: 1, unitPrice: 200, discPct: 0 }, 0)).toBe(0)
   })
 
   it('amount in words matches supplier print', () => {

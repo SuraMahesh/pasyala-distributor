@@ -13,7 +13,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:import-purchases": "tsx --env-file-if-exists=.env src/db/import-purchases-cli.ts",
-    "db:import-sales": "tsx --env-file-if-exists=.env src/db/import-sales-cli.ts"
+    "db:import-sales": "tsx --env-file-if-exists=.env src/db/import-sales-cli.ts",
+    "db:recost-sales": "tsx --env-file-if-exists=.env src/db/recost-sales-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

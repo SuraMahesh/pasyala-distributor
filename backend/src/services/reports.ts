@@ -61,15 +61,16 @@ const withProfit = <T extends { revenue: number; cost: number }>(x: T) => ({ ...
 
 /**
  * Every sales line (+) and sales-return line (−) in a date range, with the money it brought in after the bill
- * discount and the cost of the goods. Summing these gives sales net of returns — the figure used everywhere.
+ * discount and the cost of the goods (charged units × paid unit price; free units cost nothing). Summing these
+ * gives sales net of returns — the figure used everywhere.
  */
 const lineMoves = (from: string, to: string) => sql`(
   select sl.product_id, si.customer_id, si.id as invoice_id, si.date, sl.qty, sl.free_qty,
-         sl.line_net * (1 - si.bill_disc_pct / 100) as revenue, sl.unit_cost * (sl.qty + sl.free_qty) as cost
+         sl.line_net * (1 - si.bill_disc_pct / 100) as revenue, sl.unit_cost * sl.qty as cost
     from sales_lines sl join sales_invoices si on si.id = sl.invoice_id where si.date between ${from} and ${to}
   union all
   select rl.product_id, r.customer_id, null, r.date, -rl.qty, -rl.free_qty,
-         -(rl.line_net * (1 - r.bill_disc_pct / 100)), -(rl.unit_cost * (rl.qty + rl.free_qty))
+         -(rl.line_net * (1 - r.bill_disc_pct / 100)), -(rl.unit_cost * rl.qty)
     from sales_return_lines rl join sales_returns r on r.id = rl.return_id where r.date between ${from} and ${to}
 )`
 

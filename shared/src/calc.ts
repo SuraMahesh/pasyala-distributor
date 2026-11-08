@@ -42,13 +42,12 @@ export function invoiceTotals(lines: CalcLine[], billDiscPct: number): InvoiceTo
 }
 
 /**
- * Landed cost per physical unit for a purchase line:
- * line net after the bill discount, spread over paid + free units.
+ * Landed cost of ONE PAID unit on a purchase line: line net after the bill discount ÷ paid qty
+ * (list − 22% − 8% = 71.76% of list at Pasyale). Free issues cost nothing — they add stock at Rs 0 and never dilute this price.
  */
 export function landedUnitCost(l: CalcLine, billDiscPct: number) {
-  const units = l.qty + l.freeQty
-  if (!units) return 0
-  return (lineNet(l) * (1 - billDiscPct / 100)) / units
+  if (!l.qty) return 0
+  return (lineNet(l) * (1 - billDiscPct / 100)) / l.qty
 }
 
 /** Revenue a sales line actually brings in after the bill discount */

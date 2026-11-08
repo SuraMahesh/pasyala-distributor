@@ -75,7 +75,12 @@ export interface ProductStock {
   /** units customers sent back that went back on the shelf (returns marked "write off" are not counted) */
   returned: number
   onHand: number
+  /** cost of one PAID unit (list − supplier discounts); free issues are Rs 0, so the field is the paid price, not an average over free units */
   avgCost: number
+  /** units on hand that were bought at the unit price */
+  paidOnHand: number
+  /** units on hand that came free (unit price 0) */
+  freeOnHand: number
   /** free units received from the supplier (unit price 0) */
   freeIn: number
   /** free units given to customers */
@@ -88,10 +93,6 @@ export interface ProductStock {
 
 export type ProductWithStock = Product &
   ProductStock & {
-    /** units on hand that were bought at the unit price */
-    paidOnHand: number
-    /** units on hand that came free (unit price 0) */
-    freeOnHand: number
     /** paidOnHand × unit price */
     grossValue: number
     /** line + bill discount on grossValue */

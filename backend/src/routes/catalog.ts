@@ -42,9 +42,7 @@ export async function productsWithStock(ex: Executor): Promise<ProductWithStock[
     // Stock is valued like the supplier invoices it came from: charged units × unit price, less that GRN's
     // line discount and bill discount. Sales take the oldest stock first (FIFO), so what is on hand is the
     // newest refills — each keeps its own price and discounts. Free units add nothing to the amount.
-    const onHand = Math.max(st.onHand, 0)
-    const freeOnHand = Math.min(onHand, Math.max(st.freeIn - st.freeOut, 0))
-    const paidOnHand = onHand - freeOnHand
+    const { paidOnHand, freeOnHand } = st
     const opening = { invoiceId: null, invoiceNo: 'Opening stock', date: '', qty: p.openingStock, freeQty: 0, unitPrice: p.listPrice, lineDiscPct: p.supplierDiscPct, billDiscPct: 0 }
     const layers = [...(p.openingStock > 0 ? [opening] : []), ...(batchMap.get(p.id) ?? [])].reverse()
     let paidLeft = paidOnHand

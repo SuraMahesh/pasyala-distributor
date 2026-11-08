@@ -66,10 +66,12 @@ describe('starting data from the 5 Pasyale invoices', () => {
     expect(list.summary.subTotal - list.summary.billDiscount).toBeCloseTo(list.summary.netTotal, 2)
   })
 
-  it('stock includes free issues and landed cost spreads discounts', async () => {
+  it('stock includes free issues; the unit cost is the paid price and free issues cost nothing', async () => {
     const p = await product('THMN0030') // 120 + 10 free @ 200 −22% −8%
     expect(p.onHand).toBe(130)
-    expect(p.avgCost).toBeCloseTo((120 * 200 * 0.78 * 0.92) / 130, 3)
+    expect(p.paidOnHand).toBe(120)
+    expect(p.freeOnHand).toBe(10)
+    expect(p.avgCost).toBeCloseTo(200 * 0.78 * 0.92, 3) // 143.52 = 71.76% of list, not spread over the free units
     const dr = await product('RSDH1000')
     expect(dr.onHand).toBe(50)
     expect(dr.avgCost).toBeCloseTo(4500 * 0.78 * 0.92, 3)
@@ -135,7 +137,10 @@ describe('sales invoices', () => {
     expect(inv.netTotal).toBe(6350.4)
     expect(inv.status).toBe('unpaid')
     expect(inv.lines[0]).toMatchObject({ code: 'THMN0030', qty: 24, freeQty: 2, lineNet: 4320 })
-    expect(inv.costTotal).toBeGreaterThan(0)
+    // charged units at 143.52 (list 200 − 22% − 8%); the 2 free units given cost Rs 0 and the unit cost stays the paid price
+    expect(inv.costTotal).toBeCloseTo(24 * 143.52 + 12 * 143.52, 2)
+    expect(inv.lines[0].unitCost).toBeCloseTo(143.52, 4)
+    expect(inv.lines[1].unitCost).toBeCloseTo(143.52, 4)
     expect((await product('THMN0030')).onHand).toBe(130 - 26)
   })
 
@@ -173,6 +178,23 @@ describe('sales invoices', () => {
     expect((await product('RSDH1000')).onHand).toBe(10)
     expect((await api.delete(`/api/sales/${created.body.id}`)).status).toBe(200)
     expect((await product('RSDH1000')).onHand).toBe(50)
+  })
+
+  it('re-costing changes nothing already costed with the rule, and repairs a tampered invoice', async () => {
+    const { recostSales } = await import('./services/recost')
+    const before = await recostSales(database.db, false)
+    expect(before.changed).toBe(0)
+    expect(before.invoices).toBeGreaterThan(0)
+    await database.db.execute(sql`update sales_lines set unit_cost = 1 where invoice_id = ${ids.sale1}`)
+    await database.db.execute(sql`update sales_invoices set cost_total = 1 where id = ${ids.sale1}`)
+    const preview = await recostSales(database.db, false)
+    expect(preview.changed).toBe(1)
+    expect((await api.get(`/api/sales/${ids.sale1}`)).body.costTotal).toBe(1) // preview wrote nothing
+    const fixed = await recostSales(database.db, true)
+    expect(fixed.changed).toBe(1)
+    expect(fixed.rows[0]).toMatchObject({ invoiceNo: 'PJD-000001', oldCost: 1 })
+    expect((await api.get(`/api/sales/${ids.sale1}`)).body.costTotal).toBeCloseTo(36 * 143.52, 2)
+    expect((await recostSales(database.db, false)).changed).toBe(0)
   })
 
   it('validates input with clear messages', async () => {
@@ -243,7 +265,7 @@ describe('sales returns (credit notes)', () => {
     expect(r).toMatchObject({ returnNo: 'PJD-R000001', netTotal: 684, credited: 684, refunded: 0, restock: true, invoiceNo: sale.body.invoiceNo, customerName: 'Siddhi Ayurveda Clinic', notes: 'back from the shelf' })
     expect(r.lines[0]).toMatchObject({ code: 'ATCS0030', qty: 4, freeQty: 1, lineNet: 720 })
     expect(r.lines[0].unitCost).toBeGreaterThan(0)
-    expect(r.costTotal).toBeCloseTo(r.lines[0].unitCost * 5, 2)
+    expect(r.costTotal).toBeCloseTo(r.lines[0].unitCost * 4, 2) // the free unit coming back costs nothing
     expect((await product('ATCS0030')).onHand).toBe(before - 22 + 5)
 
     const inv = (await api.get(`/api/sales/${ids.retSale}`)).body
@@ -566,6 +588,18 @@ describe('lists, pagination and reports', () => {
     }
     expect(list.summary.discountMargin).toBeCloseTo(list.items.reduce((s: number, r: { discountMargin: number }) => s + r.discountMargin, 0), 2)
     expect(list.summary.discountGiven).toBeCloseTo(list.summary.gross - list.summary.netTotal, 2)
+  })
+
+  it('the sales list carries the supplier bill discount (8% of the goods after 22%) from the newest GRN', async () => {
+    const list = (await api.get('/api/sales?pageSize=200')).body
+    const newest = (await api.get('/api/purchases?pageSize=1&sort=date&dir=desc')).body.items[0]
+    expect(newest.billDiscPct).toBeGreaterThan(0)
+    expect(list.summary.supplierBillDiscPct).toBe(newest.billDiscPct)
+    for (const row of list.items) {
+      expect(row.supplierBillDiscPct).toBe(newest.billDiscPct)
+      expect(row.supplierBillDiscount).toBeCloseTo(((row.gross - row.itemDiscount) * newest.billDiscPct) / 100, 2)
+    }
+    expect(list.summary.supplierBillDiscount).toBeCloseTo(list.items.reduce((s: number, r: { supplierBillDiscount: number }) => s + r.supplierBillDiscount, 0), 2)
   })
 
   it('returns 404 / 400 for bad ids', async () => {

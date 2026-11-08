@@ -29,7 +29,7 @@ export function BreakdownModal<T>({ title, subtitle, columns, rows, rowKey, foot
   ) : undefined
   return (
     <Modal open onClose={onClose} title={title} size="xl">
-      {subtitle && <p className="mb-3 text-sm text-stone-500">{subtitle}</p>}
+      {subtitle && <div className="mb-3 text-sm text-stone-500">{subtitle}</div>}
       {loading ? <Spinner /> : <ClientTable rows={rows} columns={columns} rowKey={rowKey} footer={footer} mobileFooter={mobileFooter} initialPageSize={25} initialSort={initialSort} empty="Nothing in this selection." />}
     </Modal>
   )

@@ -26,7 +26,7 @@ import {
 import { badRequest, conflict, notFound } from '../errors'
 import { customerDues, supplierDues } from './dues'
 import { returnedOnInvoice, returnsOfSale } from './returns'
-import { assertStockAvailable, lockProducts, mergeDeltas, stockMap, unitsByProduct } from './stock'
+import { assertStockAvailable, lockProducts, mergeDeltas, saleCosts, stockMap, unitsByProduct } from './stock'
 import { purchaseUsage, usageMessage } from './usage'
 
 export interface SaveResult {
@@ -95,7 +95,9 @@ export async function saveSale(db: DB, input: SalesInvoiceInput, id?: number): P
     if (input.paidOnInvoice > totals.netTotal + 0.004) {
       throw badRequest(`Paid amount (${rs(input.paidOnInvoice)}) is more than the invoice total (${rs(totals.netTotal)})`)
     }
-    const stock = await stockMap(tx, [...new Set(input.lines.map((l) => l.productId))])
+    const stock = await stockMap(tx, [...new Set([...input.lines, ...oldLines].map((l) => l.productId))])
+    // charged units at the paid unit price; free items cost Rs 0 on both sides (see saleCosts)
+    const costs = saleCosts(input.lines, stock)
     const lineRows = input.lines.map((l, i) => ({
       lineNo: i + 1,
       productId: l.productId,
@@ -104,9 +106,9 @@ export async function saveSale(db: DB, input: SalesInvoiceInput, id?: number): P
       unitPrice: l.unitPrice,
       discPct: l.discPct,
       lineNet: lineNet(l),
-      unitCost: stock.get(l.productId)?.avgCost ?? 0,
+      unitCost: costs[i].unitCost,
     }))
-    const costTotal = round2(lineRows.reduce((s, l) => s + l.unitCost * (l.qty + l.freeQty), 0))
+    const costTotal = round2(costs.reduce((s, c) => s + c.cost, 0))
     const header = {
       date: input.date,
       customerId: input.customerId,
@@ -144,7 +146,8 @@ export async function saveSale(db: DB, input: SalesInvoiceInput, id?: number): P
     const billFactor = 1 - input.billDiscPct / 100
     for (const l of lineRows) {
       if (l.qty === 0) continue
-      const netUnit = (l.lineNet * billFactor) / (l.qty + l.freeQty)
+      // price per charged unit vs the paid unit price — free units are outside the margin maths
+      const netUnit = (l.lineNet * billFactor) / l.qty
       if (netUnit + 0.005 < l.unitCost) {
         const s = stock.get(l.productId)
         warnings.push(`${s?.label ?? 'Item'} sold below cost (Rs ${rs(netUnit)} vs cost Rs ${rs(l.unitCost)})`)

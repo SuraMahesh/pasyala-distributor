@@ -63,7 +63,7 @@ export function transactionRoutes(db: DB) {
     if (q.to) where.push(lte(salesInvoices.date, q.to))
     if (q.customerId) where.push(eq(salesInvoices.customerId, q.customerId))
     if (q.typeId) where.push(eq(customers.typeId, q.typeId))
-    const [list, dues] = await Promise.all([
+    const [list, dues, [lastGrn]] = await Promise.all([
       db
         .select({
           id: salesInvoices.id, invoiceNo: salesInvoices.invoiceNo, date: salesInvoices.date, payMethod: salesInvoices.payMethod,
@@ -80,13 +80,19 @@ export function transactionRoutes(db: DB) {
         .innerJoin(customerTypes, eq(customerTypes.id, customers.typeId))
         .where(where.length ? and(...where) : undefined),
       customerDues(db),
+      // the supplier's bill discount (8%) on the newest GRN — taken off the goods after the item discount
+      db.select({ pct: purchaseInvoices.billDiscPct }).from(purchaseInvoices).orderBy(desc(purchaseInvoices.date), desc(purchaseInvoices.createdAt), desc(purchaseInvoices.id)).limit(1),
     ])
+    const supplierBillDiscPct = lastGrn?.pct ?? 0
     // discount given = everything off the list price (line + bill discounts); discount margin = the part beyond the
-    // supplier's item discount (a 30% customer: 30 − 22 = 8% of gross; a 35% customer: 13%)
+    // supplier's item discount (a 30% customer: 30 − 22 = 8% of gross; a 35% customer: 13%).
+    // supplierBillDiscount = the supplier's bill discount on the same goods, so gross − itemDiscount − supplierBillDiscount
+    // is the goods at the supplier's net price (22% + 8% → 71.76% of list)
     let items = list.map((i) => {
       const itemDiscount = round2(Number(i.itemDiscount))
       const discountGiven = round2(i.gross - i.netTotal)
-      return { ...i, itemDiscount, discountGiven, discountMargin: round2(discountGiven - itemDiscount), ...dues.byInvoice.get(i.id)! }
+      const supplierBillDiscount = round2(((i.gross - itemDiscount) * supplierBillDiscPct) / 100)
+      return { ...i, itemDiscount, discountGiven, discountMargin: round2(discountGiven - itemDiscount), supplierBillDiscPct, supplierBillDiscount, ...dues.byInvoice.get(i.id)! }
     })
     if (q.status === 'paid') items = items.filter((i) => i.status === 'paid')
     if (q.status === 'due') items = items.filter((i) => i.status !== 'paid')
@@ -104,6 +110,7 @@ export function transactionRoutes(db: DB) {
       summary: {
         count: filtered.length, netTotal: sum((i) => i.netTotal), due: sum((i) => i.due), profit: sum((i) => i.netTotal - i.costTotal),
         gross: sum((i) => i.gross), discountGiven: sum((i) => i.discountGiven), itemDiscount: sum((i) => i.itemDiscount), discountMargin: sum((i) => i.discountMargin),
+        supplierBillDiscPct, supplierBillDiscount: sum((i) => i.supplierBillDiscount),
       },
     })
   })

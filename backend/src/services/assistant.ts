@@ -127,7 +127,7 @@ export function makeTools(data: AssistantData) {
     run: async ({ productId }) => {
       const p = await data.getProduct(productId)
       if (!p) return j({ error: `No product with id ${productId}` })
-      return j({ id: p.id, code: p.code, label: label(p), category: p.category, active: p.active, onHand: p.onHand, chargedOnHand: p.paidOnHand, freeOnHand: p.freeOnHand, opening: p.opening, purchased: p.purchased, sold: p.sold, returned: p.returned, adjusted: p.adjusted, reorderLevel: p.reorderLevel, avgCost: p.avgCost, sellPrice: p.sellPrice, marginPct: p.margin, stockValue: p.stockValue, batchesLeft: p.batches, formula: 'onHand = opening + purchased(incl. free) - sold(incl. free) + returned by customers (restocked) + adjusted' })
+      return j({ id: p.id, code: p.code, label: label(p), category: p.category, active: p.active, onHand: p.onHand, chargedOnHand: p.paidOnHand, freeOnHand: p.freeOnHand, opening: p.opening, purchased: p.purchased, sold: p.sold, returned: p.returned, adjusted: p.adjusted, reorderLevel: p.reorderLevel, avgCost: p.avgCost, sellPrice: p.sellPrice, marginPct: p.margin, stockValue: p.stockValue, batchesLeft: p.batches, formula: 'onHand = opening + purchased(incl. free) - sold(incl. free) + returned by customers (restocked) + adjusted; avgCost = price of one paid unit (list - supplier discounts); free items are in the stock records only: free issues received cost 0 and never dilute avgCost, free units given to customers cost 0; a sale costs charged qty x avgCost' })
     },
   })
 

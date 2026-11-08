@@ -35,6 +35,9 @@ interface SaleRow {
   itemDiscount: number
   /** discountGiven − itemDiscount: 8% of gross for a 30% customer, 13% for 35% */
   discountMargin: number
+  /** the supplier's bill discount rate (8%) and its amount on these goods after the item discount */
+  supplierBillDiscPct: number
+  supplierBillDiscount: number
   customerId: number
   partyName: string
   area: string
@@ -51,13 +54,13 @@ export function SalesList() {
   const [s, set] = useListState({ from: '', to: '', status: '', typeId: '', customerId: '', images: '', sort: 'date', dir: 'desc' as const })
   const { data: types = [] } = useCustomerTypes()
   const { data: customers = [] } = useCustomerOptions()
-  const q = usePaged<SaleRow, { count: number; netTotal: number; due: number; profit: number; gross: number; discountGiven: number; itemDiscount: number; discountMargin: number }>('sales', '/sales', s)
-  // the invoice-by-invoice table behind the Discount margin tile (every row of the current filter)
-  const [breakdown, setBreakdown] = useState<{ rows: SaleRow[]; loading: boolean } | null>(null)
-  const openBreakdown = async () => {
-    setBreakdown({ rows: [], loading: true })
+  const q = usePaged<SaleRow, { count: number; netTotal: number; due: number; profit: number; gross: number; discountGiven: number; itemDiscount: number; discountMargin: number; supplierBillDiscPct: number; supplierBillDiscount: number }>('sales', '/sales', s)
+  // the invoice-by-invoice table behind the Net sales / Discount margin tiles (every row of the current filter)
+  const [breakdown, setBreakdown] = useState<{ kind: 'net' | 'margin'; rows: SaleRow[]; loading: boolean } | null>(null)
+  const openBreakdown = async (kind: 'net' | 'margin') => {
+    setBreakdown({ kind, rows: [], loading: true })
     try {
-      setBreakdown({ rows: await fetchAll<SaleRow>('/sales', { ...s, page: undefined, pageSize: undefined }), loading: false })
+      setBreakdown({ kind, rows: await fetchAll<SaleRow>('/sales', { ...s, page: undefined, pageSize: undefined }), loading: false })
     } catch {
       setBreakdown(null)
     }
@@ -92,6 +95,18 @@ export function SalesList() {
   }
 
   const sum = q.data?.summary
+  // totals of the rows behind the Net sales table: list price → after the supplier's 22% → after the customer's discount
+  const bt = useMemo(() => {
+    if (!breakdown) return null
+    const add = (f: (r: SaleRow) => number) => breakdown.rows.reduce((a, r) => a + f(r), 0)
+    const g = add((r) => r.gross)
+    const item = add((r) => r.itemDiscount)
+    const bill = add((r) => r.supplierBillDiscount)
+    const billPct = breakdown.rows[0]?.supplierBillDiscPct ?? q.data?.summary?.supplierBillDiscPct ?? 0
+    const net = add((r) => r.netTotal)
+    // after22: the goods at the supplier's item price; after: at the supplier's net price (22% + 8%, the paid-unit cost at list)
+    return { n: breakdown.rows.length, g, item, after22: g - item, bill, billPct, after: g - item - bill, given: add((r) => r.discountGiven), net, paid: add((r) => r.paid), due: add((r) => r.due) }
+  }, [breakdown, q.data?.summary?.supplierBillDiscPct])
   return (
     <div>
       <PageHeader
@@ -108,12 +123,62 @@ export function SalesList() {
       />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat label="Invoices" value={qtyFmt(sum?.count)} />
-        <Stat label="Net sales" value={`Rs ${rs(sum?.netTotal)}`} hint={sum?.gross ? `gross Rs ${rs(sum.gross)} less Rs ${rs(sum.discountGiven)} discounts` : undefined} />
-        <Stat label="Discount margin" value={`Rs ${rs(sum?.discountMargin)}`} hint={sum?.gross ? `${pct(sum.discountMargin, sum.gross)} of gross · customer discount less the 22% item discount · tap for the table` : 'customer discount less the 22% item discount'} onClick={openBreakdown} />
+        <Stat label="Net sales" value={`Rs ${rs(sum?.netTotal)}`} hint={sum?.gross ? `gross Rs ${rs(sum.gross)} less Rs ${rs(sum.discountGiven)} discounts · tap for the table` : 'what customers were billed after discounts · tap for the table'} onClick={() => openBreakdown('net')} />
+        <Stat label="Discount margin" value={`Rs ${rs(sum?.discountMargin)}`} hint={sum?.gross ? `${pct(sum.discountMargin, sum.gross)} of gross · customer discount less the 22% item discount · tap for the table` : 'customer discount less the 22% item discount'} onClick={() => openBreakdown('margin')} />
         <Stat label="Gross profit" value={`Rs ${rs(sum?.profit)}`} tone="good" />
         <Stat label="Still to collect" value={`Rs ${rs(sum?.due)}`} tone={sum?.due ? 'warn' : 'default'} />
       </div>
-      {breakdown && (
+      {breakdown?.kind === 'net' && bt && (
+        <BreakdownModal<SaleRow>
+          title="Net sales by invoice"
+          subtitle={<>
+            {!breakdown.loading && bt.n > 0 && (
+              <dl className="mb-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 rounded-md bg-stone-50 p-3 text-stone-700 sm:grid-cols-[1fr_auto_auto]">
+                <dt>Total sales at list price (before any discount) · {bt.n} invoices</dt><dd className="text-right font-medium tabular-nums">Rs {rs(bt.g)}</dd><dd className="hidden sm:block" />
+                <dt className="text-stone-500">less the supplier's item discount 22%</dt><dd className="text-right tabular-nums text-stone-500">− Rs {rs(bt.item)}</dd><dd className="col-span-2 text-right text-xs text-stone-500 sm:col-span-1 sm:text-sm">after 22% · Rs {rs(bt.after22)}</dd>
+                <dt className="text-stone-500">less the supplier's bill discount {bt.billPct}% (on the remainder)</dt><dd className="text-right tabular-nums text-stone-500">− Rs {rs(bt.bill)}</dd><dd className="col-span-2 text-right text-xs text-stone-500 sm:col-span-1 sm:text-sm">after 22% + {bt.billPct}% · Rs {rs(bt.after)} ({pct(bt.after, bt.g)} of list)</dd>
+                <dt className="text-stone-500">less the discount given to customers ({pct(bt.given, bt.g)} of list)</dt><dd className="text-right tabular-nums text-stone-500">− Rs {rs(bt.given)}</dd><dd className="col-span-2 text-right text-xs text-stone-500 sm:col-span-1 sm:text-sm">margin over 22% · Rs {rs(bt.given - bt.item)}</dd>
+                <dt className="font-semibold text-stone-900">Net sales</dt><dd className="text-right font-semibold tabular-nums text-brand-700">Rs {rs(bt.net)}</dd><dd className="col-span-2 text-right text-xs text-stone-500 sm:col-span-1 sm:text-sm">vs after 22% + {bt.billPct}% · <span className={bt.net - bt.after < 0 ? 'text-red-600' : 'text-brand-700'}>{bt.net - bt.after < 0 ? '−' : '+'} Rs {rs(Math.abs(bt.net - bt.after))}</span> · paid Rs {rs(bt.paid)} · due Rs {rs(bt.due)}</dd>
+              </dl>
+            )}
+            <b>Gross</b> is the total at list price before any discount. <b>Item disc 22%</b> is what the supplier takes off those goods on each line, and <b>bill disc {bt.billPct}%</b> is taken off that remainder, so <b>after 22% + {bt.billPct}%</b> is the goods at the supplier's net price, the paid unit cost. Free items are not in these figures: they are tracked in stock only, on both sides.
+            <b> Discount given</b> is the customer's 30% / 35% bill discount (or line discounts on hand-typed bills); <b>net sales</b> is what the customers were billed.
+            Payments do not change it — <b>Paid</b> and <b>Due</b> show how much has been collected. Returns are credited against the invoice but not deducted here; Reports shows sales net of returns.
+          </>}
+          rows={breakdown.rows}
+          loading={breakdown.loading}
+          rowKey={(r) => r.id}
+          initialSort={{ key: 'date', dir: 'desc' }}
+          onClose={() => setBreakdown(null)}
+          columns={[
+            { key: 'no', header: 'Invoice', sortKey: 'invoiceNo', sortValue: (r) => r.invoiceNo, render: (r) => <Link to={`/sales/${r.id}`} className="font-medium text-brand-700 hover:underline">{r.invoiceNo}</Link> },
+            { key: 'date', header: 'Date', sortKey: 'date', sortValue: (r) => r.date, render: (r) => <span className="text-stone-500">{r.date}</span> },
+            { key: 'cust', header: 'Customer', sortKey: 'party', sortValue: (r) => r.partyName, render: (r) => <span>{r.partyName}<span className="ml-1.5 text-xs text-stone-400">{r.typeName}</span></span> },
+            { key: 'gross', header: 'Gross (list)', align: 'right', sortKey: 'gross', sortValue: (r) => r.gross, render: (r) => <span className="font-medium">{rs(r.gross)}</span> },
+            { key: 'item', header: 'Item disc 22%', align: 'right', hideBelow: 'xl', render: (r) => <span className="text-stone-500">{rs(r.itemDiscount)}</span> },
+            { key: 'bill', header: `Bill disc ${bt.billPct}%`, align: 'right', hideBelow: 'xl', render: (r) => <span className="text-stone-500">{rs(r.supplierBillDiscount)}</span> },
+            { key: 'after', header: `After 22% + ${bt.billPct}%`, align: 'right', hideBelow: 'lg', sortKey: 'after', sortValue: (r) => r.gross - r.itemDiscount - r.supplierBillDiscount, render: (r) => rs(r.gross - r.itemDiscount - r.supplierBillDiscount) },
+            { key: 'pct', header: 'Disc %', align: 'right', hideBelow: 'xl', render: (r) => pct(r.discountGiven, r.gross) },
+            { key: 'given', header: 'Discount given', align: 'right', sortKey: 'given', sortValue: (r) => r.discountGiven, render: (r) => <span className="text-stone-500">{rs(r.discountGiven)}</span> },
+            { key: 'net', header: 'Net sales', align: 'right', sortKey: 'net', sortValue: (r) => r.netTotal, render: (r) => <span className="font-medium text-brand-700">{rs(r.netTotal)}</span> },
+            { key: 'paid', header: 'Paid', align: 'right', hideBelow: 'xl', sortKey: 'paid', sortValue: (r) => r.paid, render: (r) => rs(r.paid) },
+            { key: 'due', header: 'Due', align: 'right', sortKey: 'due', sortValue: (r) => r.due, render: (r) => (r.due > 0 ? <span className={r.overdue ? 'text-red-600' : 'text-amber-600'}>{rs(r.due)}</span> : <span className="text-stone-300">—</span>) },
+          ]}
+          footer={bt.n ? <tr><td colSpan={3}>Total · {bt.n} invoices</td><Td>{rs(bt.g)}</Td><Td className="hidden xl:table-cell">{rs(bt.item)}</Td><Td className="hidden xl:table-cell">{rs(bt.bill)}</Td><Td className="hidden lg:table-cell">{rs(bt.after)}</Td><Td className="hidden xl:table-cell">{pct(bt.given, bt.g)}</Td><Td>{rs(bt.given)}</Td><Td className="text-brand-700">{rs(bt.net)}</Td><Td className="hidden xl:table-cell">{rs(bt.paid)}</Td><Td>{rs(bt.due)}</Td></tr> : null}
+          totals={[
+            { label: 'Invoices', value: bt.n },
+            { label: 'Gross (list, before discounts)', value: `Rs ${rs(bt.g)}` },
+            { label: 'Item discount 22%', value: `− Rs ${rs(bt.item)}` },
+            { label: `Bill discount ${bt.billPct}%`, value: `− Rs ${rs(bt.bill)}` },
+            { label: `After 22% + ${bt.billPct}%`, value: `Rs ${rs(bt.after)}` },
+            { label: `Discount given (${pct(bt.given, bt.g)})`, value: `− Rs ${rs(bt.given)}` },
+            { label: 'Net sales', value: <span className="font-semibold text-brand-700">Rs {rs(bt.net)}</span> },
+            { label: 'Paid', value: `Rs ${rs(bt.paid)}` },
+            { label: 'Due', value: `Rs ${rs(bt.due)}` },
+          ]}
+        />
+      )}
+      {breakdown?.kind === 'margin' && (
         <BreakdownModal<SaleRow>
           title="Discount margin by invoice"
           subtitle="Discount given = gross − net (the 30% / 35% the customer gets). Item discount = the supplier's 22% on the same goods. Discount margin = the difference: 8% of gross for a 30% customer, 13% for 35%."

@@ -537,9 +537,18 @@ function ReturnEditor({ initial, invoice, isEditing, submitting, returnNo, onCan
       {/* phones & tablets: sticky totals bar */}
       <div className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)] lg:hidden">
         <details className="group">
-          <summary className="flex cursor-pointer list-none items-center justify-between py-1 text-sm">
-            <span className="text-stone-500">{validLines.length} items · tap for totals</span>
-            <span className="text-lg font-semibold tabular-nums">Rs {rs(t.netTotal)}</span>
+          <summary className="cursor-pointer list-none py-1 text-sm">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0 text-xs text-stone-500">
+                <span className="block">{validLines.length} items · gross <span className="tabular-nums text-stone-700">Rs {rs(t.gross)}</span></span>
+                <span className="block text-amber-700">Discount <span className="tabular-nums">Rs {rs(t.lineDiscount + t.billDiscount)}</span>{t.gross ? ` (${(((t.lineDiscount + t.billDiscount) / t.gross) * 100).toFixed(1)}%)` : ''}</span>
+              </div>
+              <div className="shrink-0 text-right">
+                <span className="block text-[11px] text-stone-500 uppercase">Return total</span>
+                <span className="block text-lg leading-tight font-semibold tabular-nums">Rs {rs(t.netTotal)}</span>
+              </div>
+            </div>
+            <span className="block text-[11px] text-stone-400">tap for bill discount %, refund and what comes off the balance</span>
           </summary>
           <div className="space-y-2 border-t border-stone-100 py-2 text-sm">
             <Totals t={t} d={d} credited={credited} set={set} refundError={errors.refunded} />

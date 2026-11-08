@@ -99,7 +99,7 @@ npm test                                   # shared maths + full API suite (embe
 TEST_DATABASE_URL=postgres://… npm test -w backend   # same suite on a real PostgreSQL database (it is wiped!)
 ```
 
-132 tests (113 backend + 19 shared maths) cover: the discount margin on the sales list, exchanges with other distributors, cheques not yet paid (cheque date as due date, cheque cleared), sales returns (stock back or written off, credit against the invoice, refunds, delete guards, reports net of returns), the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
+134 tests (115 backend + 19 shared maths) cover: the supplier bill discount on the sales list, sale costs on charged units only (free items at Rs 0 on both sides) and the re-cost command, the discount margin on the sales list, exchanges with other distributors, cheques not yet paid (cheque date as due date, cheque cleared), sales returns (stock back or written off, credit against the invoice, refunds, delete guards, reports net of returns), the 5 seeded invoices reproducing the printed sub/net totals to the cent, landed cost with
 free issues, customer-type / customer / product pricing priority, promotions, invoice numbering, oversell
 protection (and no number used up on failure), edit/delete returning stock, FIFO payment allocation,
 overdue & aging, credit-limit and below-cost warnings, duplicate supplier invoices, adjustments, delete
@@ -112,12 +112,13 @@ protection, pagination and report totals, login/image tokens and rate limits, ta
 |---|---|
 | Line amount | qty × unit price × (1 − disc %), rounded to cents |
 | Net total | sub total − bill discount % |
-| Landed cost / unit | Σ line net × (1 − bill disc %) ÷ Σ (qty + free) — free issues lower your cost |
+| Landed cost / unit | line net × (1 − bill disc %) ÷ paid qty — 71.76% of list at 22% + 8%. Free issues cost Rs 0: they add stock and never dilute this price |
 | Stock on hand | opening + purchased (incl. free) − sold (incl. free) + returned by customers (restocked) ± adjustments |
 | Sales return | priced as sold; comes off the customer's balance (the invoice it names first, else the oldest unpaid), less any cash refunded; sales reports are net of returns |
-| Sale cost / profit | cost per unit is saved on each sales line when the invoice is saved |
+| Sale cost / profit | charged units × the paid unit price; free items are outside the margin maths on both sides (free issues received cost Rs 0, free units given to a shop cost Rs 0 — they only move stock). The unit cost is saved on each sales line when the invoice is saved; `npm run db:recost-sales -- --apply` (from `backend/`) re-costs older invoices at today's paid unit price |
 | Invoice due | paid on the invoice is applied to that invoice; separate payments go to the **oldest** unpaid invoices first |
 | Overdue | unpaid after the credit days (customer → customer type) |
+| Net sales (Sales list) | the invoice totals after the customers' discounts: gross (list × qty) less the discount given. Payments do not change it (Paid / Due show what has been collected); returns are credited against the invoice, and Reports shows sales net of returns — click the figure for the ladder (total at list price → less the supplier's 22% item discount → less the supplier's 8% bill discount on the remainder, giving the goods at the supplier's net price → less the discount given → net sales) and the invoice-by-invoice table with the same columns plus paid and due. The 8% is the bill discount on the newest GRN |
 | Discount margin (Sales list) | discount given to the customer (gross − net) less the supplier's item discount on the same goods (22% of gross): 8% of gross for a 30% customer, 13% for 35%. The Purchases list shows the supplier's 8% **bill** discount, which is what funds it — click either figure for the invoice-by-invoice table |
 | Cheque | a cheque marked **Not yet paid** keeps the invoice due and makes it fall due on the cheque date; **Cheque cleared** on the invoice page then marks the invoice paid (on the invoice itself, not a FIFO payment). A cheque marked **Paid** settles the invoice at once. *Sales → Cheque not cleared* lists the cheques still out |
 
