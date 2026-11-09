@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "platform-report-generate": {
+      "source": "forcedotcom/sf-skills",
+      "sourceType": "github",
+      "skillPath": "skills/platform-report-generate/SKILL.md",
+      "computedHash": "c0a983b253b64add43bf57559ed3b12a0895813bbd24b62e0f1d1eab1ef4d267"
+    }
+  }
+}
