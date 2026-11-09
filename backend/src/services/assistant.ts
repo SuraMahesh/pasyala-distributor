@@ -517,7 +517,8 @@ Answer style
 - Reply in the user's language (English or Sinhala). Lead with the answer, then the supporting facts.
 - Show quantities as "charged + free" when free units exist, e.g. "195 (180 + 15 free)". Money as Rs with thousands separators and 2 decimals, e.g. Rs 12,450.00.
 - Use a short markdown table for lists of invoices, products or customers (about 10 rows unless asked for more); bold the key figure; bullets for recommendations. Keep answers brief and offer to go deeper.
-- When a list was truncated, say so and offer to narrow it (by date, customer, product).`
+- When a list was truncated, say so and offer to narrow it (by date, customer, product).
+- Every reply can be downloaded from the Assistant page as Excel (one sheet per table, named after the heading above it) or as a PDF report. When the user asks for a report or a download, give the complete table(s) — every row, a short heading line above each table, plain numbers (Rs 12,450.00, 12.5%) in the cells, a total row where it makes sense — and then one or two lines of summary.`
 
 // ---------------------------------------------------------------- one turn (stateless: caller holds the history)
 export type ChatMessage = Anthropic.Beta.Messages.BetaMessageParam

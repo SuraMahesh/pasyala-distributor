@@ -1,9 +1,15 @@
-import { MessageSquare } from 'lucide-react'
+import { FileSpreadsheet, FileText, MessageSquare } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { todayLK } from '@pjd/shared'
+import AssistantReport from '../components/AssistantReport'
 import { Markdown } from '../components/Markdown'
+import PrintPreview from '../components/PrintPreview'
 import { Empty, ErrorBox, PageHeader } from '../components/ui'
 import { toast } from 'sonner'
 import { api, ApiError } from '../lib/api'
+import { downloadExcel } from '../lib/excel'
+import { useSettings } from '../lib/hooks'
+import { parseMarkdown, tableSheets, textSheet } from '../lib/markdown'
 
 type Shown = { role: 'user' | 'assistant'; text: string }
 type Req = { id: number; label: string; onHand: number; countedQty: number; delta: number; reason: string; notes: string; requestedBy: string; status: string; approver?: string }
@@ -17,6 +23,7 @@ const QUICK = [
   'Top selling products this month',
   'What is not selling?',
   'Anything I should worry about today?',
+  'Report: sales by customer this month',
 ]
 
 const NAME_KEY = 'pjd-assistant-name'
@@ -56,7 +63,22 @@ export default function Assistant() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [requests, setRequests] = useState<Req[]>([])
+  const [pdf, setPdf] = useState<{ question: string; reply: string } | null>(null) // the reply open in the print preview
+  const { data: settings } = useSettings()
   const endRef = useRef<HTMLDivElement>(null)
+
+  // the question a reply answered: the user message just before it
+  const questionFor = (i: number) => {
+    for (let k = i - 1; k >= 0; k--) if (shown[k].role === 'user') return shown[k].text
+    return ''
+  }
+  // Excel: one sheet per table in the reply (named after its heading) plus a Report sheet with the question and the text
+  const excelReply = (i: number) => {
+    const blocks = parseMarkdown(shown[i].text)
+    const tables = tableSheets(blocks)
+    const meta: [string, string][] = [['Question', questionFor(i)], ['Date', todayLK()], ['Asked by', name.trim()], ['Business', settings?.name ?? '']]
+    return downloadExcel('assistant-report', [textSheet(blocks, meta, tables), ...tables])
+  }
 
   const loadRequests = () => api.get<Req[]>('/assistant/requests?status=all').then(setRequests).catch(() => {})
   const loadStatus = () => api.get<Status>('/assistant/status').then((s) => { setStatus(s); setStatusError(false) }).catch(() => setStatusError(true))
@@ -167,6 +189,10 @@ export default function Assistant() {
             ) : (
               <div className="max-w-full min-w-0 rounded-lg bg-stone-100 px-3 py-2 text-stone-900 sm:max-w-[95%]">
                 <Markdown text={m.text} />
+                <div className="mt-2 flex gap-4 border-t border-stone-200 pt-1.5 text-xs text-stone-500">
+                  <button type="button" className="inline-flex items-center gap-1 hover:text-brand-700" onClick={() => void excelReply(i)} title="Download this reply as an Excel file (one sheet per table)"><FileSpreadsheet size={13} /> Excel</button>
+                  <button type="button" className="inline-flex items-center gap-1 hover:text-brand-700" onClick={() => setPdf({ question: questionFor(i), reply: m.text })} title="Open this reply as a report to print or save as PDF"><FileText size={13} /> PDF</button>
+                </div>
               </div>
             )}
           </div>
@@ -175,6 +201,9 @@ export default function Assistant() {
         <div ref={endRef} />
       </div>
       {error != null && <div className="mt-3"><ErrorBox title="Something went wrong" error={error} /></div>}
+      <PrintPreview open={pdf != null} onClose={() => setPdf(null)} title={`assistant-report-${todayLK()}`}>
+        {pdf && <AssistantReport settings={settings} question={pdf.question} reply={pdf.reply} askedBy={name.trim()} date={todayLK()} />}
+      </PrintPreview>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <input
           className="input flex-1"
