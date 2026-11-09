@@ -44,7 +44,7 @@ Set `DATABASE_URL`, `PORT` in `backend/.env` (or the environment). Put it behind
 To host the frontend separately (Netlify, Vercel …) set `VITE_API_URL` when building it and `CORS_ORIGIN` on the API.
 
 **Backups:** `pg_dump -Fc pjd_erp > pjd_erp-$(date +%F).dump` daily (restore with `pg_restore`).
-Settings → *Download full Excel export* gives a readable copy too (one sheet per table). The list pages (Sales, Returns, Purchases, Stock, Products, Payments, Parties, Reports) each have an **Excel** button that downloads what is shown (every page of the current filter), and the Net sales, Discount margin and Stock amount windows download their tables the same way. The Sales list also has a checkbox column: tick invoices (or *select all on this page*) to see their net, paid, due and gross profit in a bar above the table and download just those rows.
+Settings → *Download full Excel export* gives a readable copy too (one sheet per table). The list pages (Sales, Returns, Purchases, Stock, Products, Payments, Parties, Reports) each have an **Excel** button that downloads what is shown (every page of the current filter), and the Net sales, Discount margin and Stock amount windows download their tables the same way. The Sales list also has a checkbox column: tick invoices (or *select all on this page*) to see their net, paid, due and gross profit in a bar above the table and download just those rows. Both Excel buttons on the Sales list first open a column picker (grouped Invoice / Amounts / Payment, with *All* / *None*), so the file holds only the columns you tick; the choice is remembered in the browser for the next download.
 
 Set `APP_PASSWORD` to require a password (always do this on a public server; 8+ characters).
 

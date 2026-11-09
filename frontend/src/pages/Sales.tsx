@@ -6,6 +6,7 @@ import { PAY_METHODS, qtyFmt, rs, type SalesInvoice } from '@pjd/shared'
 import { BreakdownModal, Td } from '../components/BreakdownModal'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column, type Selection } from '../components/DataTable'
+import { ExcelColumnsModal, type ExcelRequest, type ExportColumn } from '../components/ExcelColumns'
 import InvoiceDocument from '../components/InvoiceDocument'
 import InvoiceImages from '../components/InvoiceImages'
 import InvoiceEditor, { blankLine, emptyDraft, payMethodLabel, type Draft } from '../components/InvoiceEditor'
@@ -50,6 +51,31 @@ interface SaleRow {
   imageCount: number
 }
 
+// every column the sales table can put in an Excel file; the picker before the download chooses among them
+const statusText = (r: SaleRow) => (r.overdue ? 'Overdue' : r.status === 'paid' ? 'Paid' : r.status === 'partial' ? 'Part paid' : 'Unpaid')
+const SALES_XCOLS: ExportColumn<SaleRow>[] = [
+  { key: 'invoiceNo', group: 'Invoice', header: 'Invoice', value: (r) => r.invoiceNo },
+  { key: 'date', group: 'Invoice', header: 'Date', type: 'date', value: (r) => r.date },
+  { key: 'customer', group: 'Invoice', header: 'Customer', value: (r) => r.partyName },
+  { key: 'type', group: 'Invoice', header: 'Customer type', value: (r) => r.typeName },
+  { key: 'area', group: 'Invoice', header: 'Area', value: (r) => r.area },
+  { key: 'method', group: 'Invoice', header: 'Method', value: (r) => r.payMethod },
+  { key: 'gross', group: 'Amounts', header: 'Gross', type: 'money', total: true, value: (r) => r.gross },
+  { key: 'discPct', group: 'Amounts', header: 'Disc %', value: (r) => r.billDiscPct },
+  { key: 'discountGiven', group: 'Amounts', header: 'Discount given', type: 'money', total: true, value: (r) => r.discountGiven },
+  { key: 'itemDiscount', group: 'Amounts', header: 'Item discount (supplier)', type: 'money', total: true, value: (r) => r.itemDiscount },
+  { key: 'discountMargin', group: 'Amounts', header: 'Discount margin', type: 'money', total: true, value: (r) => r.discountMargin },
+  { key: 'net', group: 'Amounts', header: 'Net total', type: 'money', total: true, value: (r) => r.netTotal },
+  { key: 'cost', group: 'Amounts', header: 'Cost', type: 'money', total: true, value: (r) => r.costTotal },
+  { key: 'profit', group: 'Amounts', header: 'Profit', type: 'money', total: true, value: (r) => r.netTotal - r.costTotal },
+  { key: 'paid', group: 'Payment', header: 'Paid', type: 'money', total: true, value: (r) => r.paid },
+  { key: 'due', group: 'Payment', header: 'Due', type: 'money', total: true, value: (r) => r.due },
+  { key: 'status', group: 'Payment', header: 'Status', value: statusText },
+  { key: 'dueDate', group: 'Payment', header: 'Due date', type: 'date', value: (r) => r.dueDate },
+  { key: 'chequeNo', group: 'Payment', header: 'Cheque no', value: (r) => r.chequeNo },
+  { key: 'chequeDate', group: 'Payment', header: 'Cheque date', type: 'date', value: (r) => r.chequeDate },
+]
+
 export function SalesList() {
   const [s, set] = useListState({ from: '', to: '', status: '', payMethod: '', typeId: '', customerId: '', images: '', sort: 'date', dir: 'desc' as const })
   const { data: types = [] } = useCustomerTypes()
@@ -79,19 +105,9 @@ export function SalesList() {
     { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} overdue={r.overdue} /> },
   ]
 
-  const exportRows = (all: SaleRow[], fileBase: string) =>
-    downloadExcel(fileBase, [{
-      name: 'Sales invoices',
-      columns: [
-        { header: 'Invoice' }, { header: 'Date', type: 'date' }, { header: 'Customer' }, { header: 'Customer type' }, { header: 'Area' },
-        { header: 'Method' }, { header: 'Gross', type: 'money' }, { header: 'Disc %' }, { header: 'Discount given', type: 'money' }, { header: 'Item discount (supplier)', type: 'money' }, { header: 'Discount margin', type: 'money' },
-        { header: 'Net total', type: 'money' }, { header: 'Cost', type: 'money' }, { header: 'Profit', type: 'money' },
-        { header: 'Paid', type: 'money' }, { header: 'Due', type: 'money' }, { header: 'Status' }, { header: 'Due date', type: 'date' }, { header: 'Cheque no' }, { header: 'Cheque date', type: 'date' },
-      ],
-      rows: all.map((r) => [r.invoiceNo, r.date, r.partyName, r.typeName, r.area, r.payMethod, r.gross, r.billDiscPct, r.discountGiven, r.itemDiscount, r.discountMargin, r.netTotal, r.costTotal, r.netTotal - r.costTotal, r.paid, r.due, r.overdue ? 'Overdue' : r.status === 'paid' ? 'Paid' : r.status === 'partial' ? 'Part paid' : 'Unpaid', r.dueDate, r.chequeNo, r.chequeDate]),
-      totals: [6, 8, 9, 10, 11, 12, 13, 14, 15],
-    }])
-  const exportExcel = async () => exportRows(await fetchAll<SaleRow>('/sales', { ...s, page: undefined, pageSize: undefined }), 'sales')
+  // the Excel column picker: which rows it will write (the filter's pages, or the ticked ones)
+  const [excel, setExcel] = useState<ExcelRequest<SaleRow> | null>(null)
+  const exportExcel = () => setExcel({ title: 'Excel of the sales shown', fileBase: 'sales', sheet: 'Sales invoices', rows: () => fetchAll<SaleRow>('/sales', { ...s, page: undefined, pageSize: undefined }), scope: 'every page of the current filter' })
 
   // selected rows (the first column's checkboxes) — kept across pages until cleared
   const [picked, setPicked] = useState<Map<number, SaleRow>>(() => new Map())
@@ -287,6 +303,7 @@ export function SalesList() {
         </div>
         <button className="btn-secondary" onClick={exportExcel} title="Download the sales shown (every page of the current filter) as an Excel file"><FileSpreadsheet size={16} /> Excel</button>
       </Filters>
+      {excel && <ExcelColumnsModal request={excel} columns={SALES_XCOLS} storageKey="sales" onClose={() => setExcel(null)} />}
       {sel.n > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-stone-700">
           <span className="font-semibold text-stone-900">{sel.n} selected</span>
@@ -296,7 +313,7 @@ export function SalesList() {
           <span>due <b className={`tabular-nums ${sel.due > 0 ? 'text-amber-700' : ''}`}>Rs {rs(sel.due)}</b></span>
           <span className="hidden sm:inline">gross profit <span className="tabular-nums">Rs {rs(sel.profit)}</span></span>
           <div className="ml-auto flex gap-2">
-            <button className="btn-secondary min-h-9" onClick={() => exportRows([...picked.values()].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id), 'sales-selected')}><FileSpreadsheet size={15} /> Excel (selected)</button>
+            <button className="btn-secondary min-h-9" onClick={() => setExcel({ title: 'Excel of the selected invoices', fileBase: 'sales-selected', sheet: 'Sales invoices', rows: [...picked.values()].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id) })}><FileSpreadsheet size={15} /> Excel (selected)</button>
             <button className="btn-ghost min-h-9" onClick={() => setPicked(new Map())}><X size={15} /> Unselect all</button>
           </div>
         </div>
