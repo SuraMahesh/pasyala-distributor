@@ -13,6 +13,7 @@ import { assistantRoutes } from './routes/assistant'
 import { catalogRoutes } from './routes/catalog'
 import { imageRoutes } from './routes/images'
 import { insightRoutes } from './routes/insights'
+import { orderRoutes } from './routes/orders'
 import { partyRoutes } from './routes/parties'
 import { scanRoutes } from './routes/scan'
 import { transactionRoutes } from './routes/transactions'
@@ -66,6 +67,7 @@ export function createApp(db: DB, opts: { log?: boolean; staticDir?: string; cor
   api.use(catalogRoutes(db))
   api.use(partyRoutes(db))
   api.use(transactionRoutes(db))
+  api.use(orderRoutes(db))
   api.use(insightRoutes(db))
   api.use(assistantRoutes(db))
   api.use(imageRoutes(db))

@@ -1021,3 +1021,62 @@ describe('scanning key is separate from the assistant key', () => {
     }
   })
 })
+
+describe('order requests to the supplier', () => {
+  let supplierId = 0
+  it('saves a request with catalogue and hand-typed lines, numbers it, and takes prices from the list price', async () => {
+    supplierId = ((await api.get('/api/suppliers/options')).body as { id: number; active: boolean }[]).find((x) => x.active)!.id
+    const before = (await product('RSDH1000')).onHand
+    const res = await api.post('/api/order-requests').send({
+      supplierId, date: today, showPrices: true, notes: 'Urgent — before Friday',
+      lines: [
+        { productId: ids.RSDH1000, qty: 12 },
+        { productId: null, name: 'Nirgundiyadi thel', size: '4.5 l', qty: 2, unitPrice: null, notes: 'new item, not in our list' },
+      ],
+    })
+    expect(res.status, JSON.stringify(res.body)).toBe(201)
+    expect(res.body.requestNo).toBe('PJD-PO000001')
+    ids.order1 = res.body.id
+    const r = (await api.get(`/api/order-requests/${ids.order1}`)).body
+    expect(r.status).toBe('draft')
+    expect(r.lines).toHaveLength(2)
+    expect(r.lines[0].code).toBe('RSDH1000')
+    expect(r.lines[0].unitPrice).toBeGreaterThan(0) // the supplier's list price
+    expect(r.lines[1]).toMatchObject({ productId: null, code: '', name: 'Nirgundiyadi thel', size: '4.5L', qty: 2, unitPrice: null })
+    expect(r.units).toBe(14)
+    expect(r.unpriced).toBe(1)
+    expect(r.total).toBeCloseTo(12 * r.lines[0].unitPrice, 2)
+    expect((await product('RSDH1000')).onHand).toBe(before) // a request never moves stock
+    expect((await api.get('/api/settings')).body.nextOrderNo).toBe(2)
+  })
+
+  it('lists and filters by status, flips the status and the price switch, suggests low-stock items, and deletes', async () => {
+    const open = (await api.get('/api/order-requests?status=open')).body
+    expect(open.items.map((i: { id: number }) => i.id)).toContain(ids.order1)
+    expect(open.items[0]).toMatchObject({ lineCount: 2, units: 14, unpriced: 1 })
+    expect(open.summary.open).toBe(1)
+    const sent = (await api.put(`/api/order-requests/${ids.order1}/flags`).send({ status: 'sent', showPrices: false })).body
+    expect(sent).toMatchObject({ status: 'sent', showPrices: false })
+    expect((await api.get('/api/order-requests?status=draft')).body.items.map((i: { id: number }) => i.id)).not.toContain(ids.order1)
+    expect((await api.get('/api/order-requests?search=nirgundi')).body.total).toBe(0) // search covers number, supplier, notes
+    expect((await api.get('/api/order-requests?search=friday')).body.total).toBe(1)
+    const sug = (await api.get('/api/order-requests/suggestions')).body as { qty: number; onHand: number; reorderLevel: number }[]
+    for (const s of sug) {
+      expect(s.qty).toBeGreaterThan(0)
+      expect(s.onHand).toBeLessThanOrEqual(s.reorderLevel)
+    }
+    // validation: a line needs an item or a typed name, and a quantity
+    expect((await api.post('/api/order-requests').send({ supplierId, date: today, lines: [{ productId: null, name: '', size: '', qty: 1 }] })).status).toBe(400)
+    expect((await api.post('/api/order-requests').send({ supplierId, date: today, lines: [{ productId: ids.RSDH1000, qty: 0 }] })).status).toBe(400)
+    expect((await api.post('/api/order-requests').send({ supplierId, date: today, lines: [] })).status).toBe(400)
+    // edit keeps the number and replaces the lines
+    const edited = await api.put(`/api/order-requests/${ids.order1}`).send({ supplierId, date: today, status: 'sent', showPrices: true, notes: '', lines: [{ productId: ids.RSDH1000, qty: 5, unitPrice: 100 }] })
+    expect(edited.status).toBe(200)
+    expect(edited.body.requestNo).toBe('PJD-PO000001')
+    const after = (await api.get(`/api/order-requests/${ids.order1}`)).body
+    expect(after.lines).toHaveLength(1)
+    expect(after.total).toBe(500)
+    expect((await api.delete(`/api/order-requests/${ids.order1}`)).status).toBe(200)
+    expect((await api.get(`/api/order-requests/${ids.order1}`)).status).toBe(404)
+  })
+})

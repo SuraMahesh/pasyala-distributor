@@ -46,6 +46,8 @@ To host the frontend separately (Netlify, Vercel …) set `VITE_API_URL` when bu
 **Backups:** `pg_dump -Fc pjd_erp > pjd_erp-$(date +%F).dump` daily (restore with `pg_restore`).
 Settings → *Download full Excel export* gives a readable copy too (one sheet per table). The list pages (Sales, Returns, Purchases, Stock, Products, Payments, Parties, Reports) each have an **Excel** button that downloads what is shown (every page of the current filter), and the Net sales, Discount margin and Stock amount windows download their tables the same way. Every Assistant reply has **Report view**, **Excel** and **PDF** links under it. Report view lays the reply out as a report: business header, the question, a headline tile per table (the total of its key amount), each table with a Total row (added when the assistant left it out) and a bar chart of its key column, then the notes. Excel writes a Report sheet (question, date, the reply's text) plus one sheet per table, named after the heading above the table, with amounts and percentages as numbers and a TOTAL row; PDF opens the same report in the print preview (Print / Save PDF). A question that says "report" (or වාර්තා) and comes back with a table opens the report view by itself. The Sales list also has a checkbox column: tick invoices (or *select all on this page*) to see their net, paid, due and gross profit in a bar above the table and download just those rows. Both Excel buttons on the Sales list first open a column picker (grouped Invoice / Amounts / Payment, with *All* / *None*), so the file holds only the columns you tick; the choice is remembered in the browser for the next download.
 
+**Order requests** (Purchases → Order requests) are the lists of items to order from Pasyale: pick items from the product list, or add an item *by hand* (name, size / variation, quantity) when it is not in the stock list yet; *Add low-stock items* fills in everything at or below its reorder level. A switch shows or hides the prices (the supplier's list price, editable per line) on the printed request, which goes out as a print or PDF with the business header, "To" the supplier and signature lines. Requests are numbered `PJD-PO000001…` with their own counter in Settings, move draft → sent → received (or cancelled), never touch stock or money, and *Enter GRN* opens a new purchase invoice with the request's catalogue items filled in.
+
 Set `APP_PASSWORD` to require a password (always do this on a public server; 8+ characters).
 
 **Security notes.** Login tokens are signed with a random secret the server creates on first start and keeps in the
@@ -146,7 +148,7 @@ All lists are paginated on the server (10/25/50/100 per page), sortable, searcha
 `products`, `products/options`, `products/:id`, `products/:id/movements`, `products/bulk-price`,
 `customer-types`, `price-rules`, `price-list?typeId=`, `promotions`, `pricing/context`,
 `customers`, `customers/:id`, `suppliers`, `suppliers/:id`,
-`sales`, `sales/:id`, `sales-returns`, `sales-returns/:id`, `purchases`, `purchases/:id`, `payments`, `adjustments`,
+`sales`, `sales/:id`, `sales-returns`, `sales-returns/:id`, `purchases`, `purchases/:id`, `order-requests`, `order-requests/:id` (+ `/flags`, `/suggestions`), `payments`, `adjustments`,
 `reports/summary|by-product|by-customer|by-type|daily|aging`, `dashboard`, `alerts`, `settings`, `export`.
 List endpoints accept `page`, `pageSize`, `search`, `sort`, `dir` and return `{ items, total, page, pageSize, summary }`.
 

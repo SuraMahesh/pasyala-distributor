@@ -89,6 +89,7 @@ export default function Settings() {
           <Field label="Invoice prefix"><input className="input" value={form.invoicePrefix} onChange={(e) => set({ invoicePrefix: e.target.value })} /></Field>
           <Field label="Next invoice number" hint={`Next: ${form.invoicePrefix}${String(form.nextInvoiceNo).padStart(6, '0')}`}><NumberInput min={1} step={1} value={form.nextInvoiceNo} onChange={(v) => set({ nextInvoiceNo: Math.max(1, Math.round(v ?? 1)) })} /></Field>
           <Field label="Next sales return number" hint={`Next: ${form.invoicePrefix}R${String(form.nextReturnNo).padStart(6, '0')}`}><NumberInput min={1} step={1} value={form.nextReturnNo} onChange={(v) => set({ nextReturnNo: Math.max(1, Math.round(v ?? 1)) })} /></Field>
+          <Field label="Next order request number" hint={`Next: ${form.invoicePrefix}PO${String(form.nextOrderNo).padStart(6, '0')}`}><NumberInput min={1} step={1} value={form.nextOrderNo} onChange={(v) => set({ nextOrderNo: Math.max(1, Math.round(v ?? 1)) })} /></Field>
           <Field label="Our customer code at the supplier" hint="Printed on purchase (GRN) copies"><input className="input" value={form.supplierCustomerCode} onChange={(e) => set({ supplierCustomerCode: e.target.value })} /></Field>
           <Field label="Invoice footer"><input className="input" value={form.footerNote} onChange={(e) => set({ footerNote: e.target.value })} /></Field>
           <label className="flex items-start gap-2 text-sm sm:col-span-2">

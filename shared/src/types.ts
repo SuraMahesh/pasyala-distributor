@@ -18,6 +18,10 @@ export type PayMethod = (typeof PAY_METHODS)[number]
 export const RETURN_REASONS = ['Damaged', 'Expired', 'Wrong item', 'Unsold stock', 'Other'] as const
 export type ReturnReason = (typeof RETURN_REASONS)[number]
 
+/** Order request (purchase order) to the supplier: draft → sent → received when the GRN arrives, or cancelled */
+export const ORDER_REQUEST_STATUSES = ['draft', 'sent', 'received', 'cancelled'] as const
+export type OrderRequestStatus = (typeof ORDER_REQUEST_STATUSES)[number]
+
 /** 'Exchange with distributor' = goods swapped with another Pasyale distributor: a negative qty is what we handed over, a positive qty what we got */
 export const ADJ_REASONS = ['Count correction', 'Damage', 'Expired', 'Return', 'Sample', 'Exchange with distributor', 'Other'] as const
 export type AdjReason = (typeof ADJ_REASONS)[number]
@@ -38,6 +42,8 @@ export interface Settings {
   nextInvoiceNo: number
   /** sales returns are numbered <prefix>R000001, R000002 … */
   nextReturnNo: number
+  /** order requests to the supplier are numbered <prefix>PO000001, PO000002 … */
+  nextOrderNo: number
   footerNote: string
   supplierCustomerCode: string
   allowNegativeStock: boolean
@@ -284,6 +290,41 @@ export interface PurchaseInvoice extends InvoiceHeader {
   orderNo: string
   salesPerson: string
   lines: InvoiceLine[]
+}
+
+/** One line of an order request: an item from the catalogue (productId) or one typed by hand (name + variation) that is not in the stock list yet */
+export interface OrderRequestLine {
+  id: number
+  lineNo: number
+  productId: number | null
+  /** the catalogue code, blank for a hand-typed item */
+  code: string
+  name: string
+  /** size / variation, e.g. 750ML, "large", "with pump" */
+  size: string
+  qty: number
+  /** the supplier's list price when known; null means "price not given" */
+  unitPrice: number | null
+  notes: string
+}
+
+export interface OrderRequest {
+  id: number
+  requestNo: string
+  supplierId: number
+  supplierName: string
+  date: string
+  status: OrderRequestStatus
+  /** print the price and amount columns on the request */
+  showPrices: boolean
+  notes: string
+  lines: OrderRequestLine[]
+  /** Σ qty */
+  units: number
+  /** Σ qty × unit price over the priced lines; null when no line has a price */
+  total: number | null
+  /** lines with no price */
+  unpriced: number
 }
 
 export interface Payment {

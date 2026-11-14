@@ -31,6 +31,7 @@ const page = <M extends Record<string, unknown>>(load: () => Promise<M>, name: k
 const sales = () => import('./pages/Sales')
 const returns = () => import('./pages/SalesReturns')
 const purchases = () => import('./pages/Purchases')
+const orders = () => import('./pages/OrderRequests')
 const parties = () => import('./pages/Parties')
 const products = () => import('./pages/Products')
 
@@ -67,6 +68,10 @@ const router = createBrowserRouter([
       { path: 'sales/:id/edit', element: page(sales, 'SaleEdit') },
       { path: 'purchases', element: page(purchases, 'PurchaseList') },
       { path: 'purchases/new', element: page(purchases, 'PurchaseEdit') },
+      { path: 'purchases/requests', element: page(orders, 'OrderRequestList') },
+      { path: 'purchases/requests/new', element: page(orders, 'OrderRequestEdit') },
+      { path: 'purchases/requests/:id', element: page(orders, 'OrderRequestView') },
+      { path: 'purchases/requests/:id/edit', element: page(orders, 'OrderRequestEdit') },
       { path: 'purchases/:id', element: page(purchases, 'PurchaseView') },
       { path: 'purchases/:id/edit', element: page(purchases, 'PurchaseEdit') },
       { path: 'products', element: page(products) },

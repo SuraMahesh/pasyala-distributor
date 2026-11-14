@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { invoiceTotals, round2, type CalcLine } from './calc'
-import { ADJ_REASONS, CATEGORIES, PAY_METHODS, RETURN_REASONS } from './types'
+import { ADJ_REASONS, CATEGORIES, ORDER_REQUEST_STATUSES, PAY_METHODS, RETURN_REASONS } from './types'
 
 const isRealDate = (d: string) => {
   const t = new Date(`${d}T00:00:00Z`)
@@ -32,6 +32,7 @@ export const settingsSchema = z.object({
   invoicePrefix: text(10),
   nextInvoiceNo: z.number().int().min(1).max(1_000_000_000),
   nextReturnNo: z.number().int().min(1).max(1_000_000_000).default(1),
+  nextOrderNo: z.number().int().min(1).max(1_000_000_000).default(1),
   footerNote: text(300),
   supplierCustomerCode: text(30),
   allowNegativeStock: z.boolean(),
@@ -167,6 +168,27 @@ export const salesReturnSchema = z
   })
   .refine((r) => r.refunded <= 0 || r.refundMethod !== '', { message: 'Choose how the money was refunded', path: ['refundMethod'] })
 
+/** Order request to the supplier. A line is either a catalogue item (productId) or a hand-typed item (name + size) that is not in the stock list. */
+export const orderRequestLineSchema = z
+  .object({
+    productId: z.number().int().nullable().default(null),
+    name: text(120),
+    size: text(40).transform(normaliseSize),
+    qty: z.number().int('Whole numbers only').min(1, 'Qty must be at least 1').max(1e7),
+    unitPrice: money.nullable().default(null),
+    notes: text(120),
+  })
+  .refine((l) => l.productId !== null || l.name.trim() !== '', { message: 'Choose an item or type its name', path: ['name'] })
+
+export const orderRequestSchema = z.object({
+  supplierId: z.number().int({ message: 'Choose a supplier' }),
+  date,
+  status: z.enum(ORDER_REQUEST_STATUSES).default('draft'),
+  showPrices: z.boolean().default(true),
+  notes: text(500),
+  lines: z.array(orderRequestLineSchema).min(1, 'Add at least one item').max(500, 'A request can have at most 500 lines'),
+})
+
 export const paymentSchema = z
   .object({
     date,
@@ -210,6 +232,8 @@ export type SalesInvoiceInput = WithOptionalCheque<z.infer<typeof salesInvoiceSc
 export type SalesReturnInput = z.infer<typeof salesReturnSchema>
 export type PurchaseInvoiceInput = WithOptionalCheque<z.infer<typeof purchaseInvoiceSchema>>
 export type PaymentInput = z.infer<typeof paymentSchema>
+export type OrderRequestInput = z.infer<typeof orderRequestSchema>
+export type OrderRequestLineInput = z.infer<typeof orderRequestLineSchema>
 export type AdjustmentInput = z.infer<typeof adjustmentSchema>
 export type ListQuery = z.infer<typeof listQuerySchema>
 

@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { Eye, FileSpreadsheet, Paperclip, Lock, Pencil, Plus, Printer, ScanLine, Trash2, Wallet } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
-import { Link, useInRouterContext, useNavigate, useParams } from 'react-router-dom'
-import { rs, type PurchaseInvoice, type PurchaseUsage } from '@pjd/shared'
+import { ClipboardList, Eye, FileSpreadsheet, Paperclip, Lock, Pencil, Plus, Printer, ScanLine, Trash2, Wallet } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Link, useInRouterContext, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
+import { rs, type OrderRequest, type PurchaseInvoice, type PurchaseUsage } from '@pjd/shared'
 import { BreakdownModal, Td } from '../components/BreakdownModal'
 import { useConfirm } from '../components/Confirm'
 import { DataTable, type Column } from '../components/DataTable'
@@ -74,6 +75,7 @@ export function PurchaseList() {
         subtitle="Supplier invoices — every line adds qty + free qty to stock"
         actions={
           <>
+            <Link to="/purchases/requests" className="btn-secondary" title="Lists of items to order from the supplier"><ClipboardList size={16} /> Order requests</Link>
             <button className="btn-secondary" onClick={async () => {
               const all = await fetchAll<PurchaseRow>('/purchases', { ...s, page: undefined, pageSize: undefined })
               await downloadExcel('purchases', [{
@@ -219,11 +221,35 @@ function PurchaseDoc({ inv, d, paid }: { inv?: PurchaseInvoice; d?: Draft; paid:
   )
 }
 
+/** a new GRN opened from an order request starts with its catalogue items and quantities; hand-typed items cannot be matched and are listed in a warning */
+function requestDraft(r: OrderRequest, products: { id: number; listPrice: number; supplierDiscPct: number }[]): Draft {
+  const pmap = new Map(products.map((p) => [p.id, p]))
+  return {
+    ...emptyDraft('purchase'),
+    partyId: r.supplierId,
+    orderNo: r.requestNo,
+    lines: r.lines.filter((l) => l.productId !== null && pmap.has(l.productId)).map((l) => {
+      const p = pmap.get(l.productId!)!
+      return { ...blankLine(), productId: l.productId, qty: l.qty, unitPrice: p.listPrice, discPct: p.supplierDiscPct, manualPrice: true }
+    }),
+  }
+}
+
 export function PurchaseEdit() {
   const { id } = useParams()
   const nav = useNavigate()
+  const [sp] = useSearchParams()
+  const requestId = !id ? sp.get('request') : null
   const existing = useQuery({ queryKey: ['purchases', id], queryFn: () => api.get<PurchaseInvoice>(`/purchases/${id}`), enabled: !!id })
+  const fromRequest = useQuery({ queryKey: ['order-requests', requestId], queryFn: () => api.get<OrderRequest>(`/order-requests/${requestId}`), enabled: !!requestId })
   const { data: suppliers = [] } = useSupplierOptions()
+  const { data: products = [] } = useProductOptions()
+  useEffect(() => {
+    const r = fromRequest.data
+    if (!r) return
+    const typed = r.lines.filter((l) => l.productId === null)
+    if (typed.length) toast.warning(`${typed.length} hand-typed item${typed.length === 1 ? '' : 's'} on ${r.requestNo} (${typed.map((l) => `${l.size} ${l.name}`.trim()).join(', ')}) must be added as products before they can go on the GRN`, { duration: 10000 })
+  }, [fromRequest.data])
   const [scan, setScan] = useState<ScanState | null>(null)
   const [scanNo, setScanNo] = useState(0)
   const usage = useQuery({ queryKey: ['purchases', id, 'usage'], queryFn: () => api.get<PurchaseUsage>(`/purchases/${id}/usage`), enabled: !!id })
@@ -237,10 +263,10 @@ export function PurchaseEdit() {
       },
     },
   )
-  if (id && existing.isLoading) return <Spinner />
+  if ((id && existing.isLoading) || (requestId && (fromRequest.isLoading || !products.length))) return <Spinner />
   if (id && existing.error) return <div><PageHeader title="Edit purchase invoice" back={{ to: '/purchases', label: 'Purchases' }} /><ErrorBox error={existing.error} /></div>
   const inv = existing.data
-  const base = inv ? toDraft(inv) : { ...emptyDraft('purchase'), partyId: suppliers.length === 1 ? suppliers[0].id : null }
+  const base = inv ? toDraft(inv) : fromRequest.data ? requestDraft(fromRequest.data, products) : { ...emptyDraft('purchase'), partyId: suppliers.length === 1 ? suppliers[0].id : null }
   const initial = scan && !inv ? scanToDraft(scan.result, base) : base
   const onScanned = (s: ScanState) => { setScan(s); setScanNo((n) => n + 1) }
   return (
@@ -257,7 +283,7 @@ export function PurchaseEdit() {
       )}
       {!inv && (scan ? <ScanReview scan={scan} kind="purchase" onScanned={onScanned} onClear={() => { setScan(null); setScanNo((n) => n + 1) }} /> : <ScanUpload kind="purchase" onScanned={onScanned} />)}
       <InvoiceEditor
-        key={`${inv?.id ?? 'new'}-${suppliers.length}-${scanNo}`}
+        key={`${inv?.id ?? 'new'}-${suppliers.length}-${scanNo}-${fromRequest.data?.id ?? ''}`}
         scanned={!!scan && !inv}
         imageInvoiceNo={!inv ? scan?.result.invoiceNo || null : null}
         printedTotal={!inv ? scan?.result.printedNetTotal ?? null : null}

@@ -130,8 +130,9 @@ export function insightRoutes(db: DB) {
       promotions: schema.promotions, customers: schema.customers, suppliers: schema.suppliers, salesInvoices: schema.salesInvoices,
       salesLines: schema.salesLines, salesReturns: schema.salesReturns, salesReturnLines: schema.salesReturnLines, purchaseInvoices: schema.purchaseInvoices, purchaseLines: schema.purchaseLines,
       payments: schema.payments, stockAdjustments: schema.stockAdjustments, invoiceImages: schema.invoiceImages, assistantRequests: schema.assistantRequests,
+      orderRequests: schema.orderRequests, orderRequestLines: schema.orderRequestLines,
     }
-    const out: Record<string, unknown> = { exportedAt: new Date().toISOString(), version: 4 }
+    const out: Record<string, unknown> = { exportedAt: new Date().toISOString(), version: 5 }
     for (const [k, t] of Object.entries(tables)) {
       const list = (await db.select().from(t as typeof schema.products)) as Record<string, unknown>[]
       out[k] = k === 'settings' ? list.map(publicSettings) : list

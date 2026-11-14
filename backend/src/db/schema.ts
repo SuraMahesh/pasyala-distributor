@@ -28,6 +28,7 @@ export const settings = pgTable('settings', {
   nextInvoiceNo: integer('next_invoice_no').notNull().default(1),
   /** sales returns are numbered <prefix>R000001, R000002 … */
   nextReturnNo: integer('next_return_no').notNull().default(1),
+  nextOrderNo: integer('next_order_no').notNull().default(1),
   footerNote: text('footer_note').notNull().default(''),
   supplierCustomerCode: text('supplier_customer_code').notNull().default(''),
   allowNegativeStock: boolean('allow_negative_stock').notNull().default(false),
@@ -241,6 +242,40 @@ export const purchaseLines = pgTable(
     ...lineCols(),
   },
   (t) => [index('purchase_lines_invoice_idx').on(t.invoiceId), index('purchase_lines_product_idx').on(t.productId)],
+)
+
+/** Order request (purchase order) sent to the supplier; nothing here moves stock — the GRN does that when the goods arrive */
+export const orderRequests = pgTable(
+  'order_requests',
+  {
+    id: serial('id').primaryKey(),
+    requestNo: text('request_no').notNull().unique(),
+    supplierId: integer('supplier_id').notNull().references(() => suppliers.id, { onDelete: 'restrict' }),
+    date: date('date', { mode: 'string' }).notNull(),
+    status: text('status').notNull().default('draft'),
+    showPrices: boolean('show_prices').notNull().default(true),
+    notes: text('notes').notNull().default(''),
+    createdAt: created(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('order_requests_date_idx').on(t.date), index('order_requests_supplier_idx').on(t.supplierId)],
+)
+
+export const orderRequestLines = pgTable(
+  'order_request_lines',
+  {
+    id: serial('id').primaryKey(),
+    requestId: integer('request_id').notNull().references(() => orderRequests.id, { onDelete: 'cascade' }),
+    lineNo: integer('line_no').notNull(),
+    /** null for an item typed by hand that is not in the stock list */
+    productId: integer('product_id').references(() => products.id, { onDelete: 'restrict' }),
+    name: text('name').notNull(),
+    size: text('size').notNull().default(''),
+    qty: integer('qty').notNull(),
+    unitPrice: money('unit_price'),
+    notes: text('notes').notNull().default(''),
+  },
+  (t) => [index('order_request_lines_request_idx').on(t.requestId), check('order_request_lines_qty_check', sql`${t.qty} > 0`)],
 )
 
 export const payments = pgTable(
