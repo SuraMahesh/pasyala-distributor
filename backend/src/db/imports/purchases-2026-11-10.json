@@ -1,0 +1,71 @@
+{
+  "_about": "Pasyale Ayurveda Osu invoices HOSI006630, HOSI006638, HOSI006653, HOSI006655 of 2026-11-10 and HOSI006398 of 2026-10-30, transcribed from photos. Quantities hidden under highlighter were worked out from the printed amounts (qty x price x 0.78). Free qtys on the 0.00 lines read as 1 per 12. HOSI006638 is a blurred photo: number read as 006638, item RSRH0200. Run: npm run db:import-purchases -- src/db/imports/purchases-2026-11-10.json [--apply] [--photos .data/import-photos/2026-11-10].",
+  "supplierCode": "SUP001",
+  "salesPerson": "Sudaraka",
+  "payMethod": "Cash",
+  "billDiscPct": 8,
+  "lineDiscPct": 22,
+  "paidInFull": true,
+  "categoryByPrefix": {
+    "TH": "Thailaya (Oil)", "AT": "Thailaya (Oil)", "AR": "Arishta / Spirit", "CH": "Choorna / Powder",
+    "GG": "Guli / Tablets", "VT": "Guli / Tablets", "LP": "Lepa / Paste", "KL": "Lepa / Paste", "RS": "Rasayana",
+    "MS": "Honey", "UN": "Other", "NP": "Other", "SY": "Other", "QU": "Other", "OT": "Other"
+  },
+  "invoices": [
+    {
+      "invoiceNo": "HOSI006398", "orderNo": "", "date": "2026-10-30", "payMethod": "Cheque",
+      "printed": { "subTotal": 87672.00, "netTotal": 80658.24 },
+      "photos": ["HOSI006398-p1.jpg"],
+      "lines": [
+        { "code": "RSAS1000", "size": "1kg", "name": "ASHWAGANDA RASAYANA", "qty": 20, "price": 4000 },
+        { "code": "RSAS0100", "size": "100g", "name": "ASHWAGANDA RASAYANA", "qty": 40, "price": 450 },
+        { "code": "THPN0030", "size": "30ML", "name": "PINDA", "qty": 72, "free": 6, "price": 200 }
+      ]
+    },
+    {
+      "invoiceNo": "HOSI006630", "orderNo": "HOSO004928", "date": "2026-11-10",
+      "printed": { "subTotal": 198775.20, "netTotal": 182873.18 },
+      "photos": ["HOSI006630-p1.jpg"],
+      "lines": [
+        { "code": "THKB0030", "size": "30ML", "name": "KEDUMBINDUM", "qty": 36, "free": 3, "price": 200 },
+        { "code": "THST0180", "size": "180ML", "name": "SATYAVADI", "qty": 25, "price": 1150 },
+        { "code": "THSV0180", "size": "180ML", "name": "SARVAVISADI", "qty": 25, "price": 850 },
+        { "code": "NPCS-P0100", "size": "100ML", "name": "PAWATTA WELMEE", "qty": 192, "free": 16, "price": 400 },
+        { "code": "GGYG0050", "size": "50g", "name": "YOGARAJA", "qty": 10, "price": 700 },
+        { "code": "VTTP0100", "size": "100g", "name": "THRIPALA VATI", "qty": 15, "price": 1000 },
+        { "code": "MSBH0030", "size": "30ML", "name": "BEE HONEY", "qty": 120, "price": 290 },
+        { "code": "THCM0030", "size": "30ML", "name": "CAMPHOR/KAPURU", "qty": 24, "free": 2, "price": 250 },
+        { "code": "THMN0180", "size": "180ML", "name": "MAHA NARAYANA", "qty": 25, "price": 800 },
+        { "code": "CHSU0100", "size": "100g", "name": "SUDARSHANA CHOORNA", "qty": 20, "price": 600 },
+        { "code": "NPSD0050", "size": "50g", "name": "SUWADA DUPAYA", "qty": 12, "price": 120 },
+        { "code": "THMM0180", "size": "180ML", "name": "MAHAMASHA", "qty": 12, "price": 1200 },
+        { "code": "THMS0180", "size": "180ML", "name": "MAHASIDDRTHA", "qty": 12, "price": 850 }
+      ]
+    },
+    {
+      "invoiceNo": "HOSI006638", "orderNo": "HOSO004928", "date": "2026-11-10",
+      "printed": { "subTotal": 5616.00, "netTotal": 5166.72 },
+      "photos": ["HOSI006638-p1.jpg"],
+      "lines": [
+        { "code": "RSRH0200", "size": "200g", "name": "RANAHANSA RASAYANA", "qty": 6, "price": 1200 }
+      ]
+    },
+    {
+      "invoiceNo": "HOSI006653", "orderNo": "HOSO004946", "date": "2026-11-10",
+      "printed": { "subTotal": 5850.00, "netTotal": 5382.00 },
+      "photos": ["HOSI006653-p1.jpg"],
+      "lines": [
+        { "code": "RSDP0400", "size": "400g", "name": "DHATHUPRUSHTI RASAYANA", "qty": 3, "price": 2500 }
+      ]
+    },
+    {
+      "invoiceNo": "HOSI006655", "orderNo": "HOSO004928", "date": "2026-11-10",
+      "printed": { "subTotal": 17082.00, "netTotal": 15715.44 },
+      "photos": ["HOSI006655-p1.jpg"],
+      "lines": [
+        { "code": "", "codeStem": "RW4500", "size": "4.5L", "name": "ROSE WATER", "category": "Other", "qty": 3, "price": 2800 },
+        { "code": "GGYG0100", "size": "100g", "name": "YOGARAJA", "qty": 10, "price": 1350 }
+      ]
+    }
+  ]
+}
