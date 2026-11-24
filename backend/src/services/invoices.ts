@@ -80,7 +80,9 @@ export async function saveSale(db: DB, input: SalesInvoiceInput, id?: number): P
     if (existing) {
       const returned = await returnedOnInvoice(tx, existing.id)
       const keep = unitsByProduct(input.lines)
-      const short = [...returned].filter(([pid, units]) => (keep.get(pid) ?? 0) < units)
+      // items added to a return by hand were never on this invoice, so they do not bind it
+      const onInvoice = new Set(oldLines.map((l) => l.productId))
+      const short = [...returned].filter(([pid, units]) => onInvoice.has(pid) && (keep.get(pid) ?? 0) < units)
       if (short.length) {
         const [pid, units] = short[0]
         const [p] = await tx.select({ label: sql<string>`${products.size} || ' ' || ${products.name}` }).from(products).where(eq(products.id, pid))

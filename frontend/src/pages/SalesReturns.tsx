@@ -247,6 +247,7 @@ export function ReturnEdit() {
             body: {
               date: d.date, customerId: d.customerId, salesInvoiceId: d.salesInvoiceId, reason: d.reason, restock: d.restock, billDiscPct: d.billDiscPct,
               refunded: d.refunded, refundMethod: d.refunded > 0 ? d.refundMethod : '', notes: d.notes,
+              extraItems: d.salesInvoiceId != null && d.lines.some((l) => l.sold == null),
               lines: d.lines.map(({ productId, qty, freeQty, unitPrice, discPct }) => ({ productId, qty, freeQty, unitPrice, discPct })),
             },
           })
@@ -297,6 +298,7 @@ function ReturnEditor({ initial, invoice, isEditing, submitting, returnNo, onCan
   const t = invoiceTotals(validLines, d.billDiscPct)
   const credited = Math.max(t.netTotal - d.refunded, 0)
   const over = validLines.filter((l) => l.sold != null && l.qty + l.freeQty > l.sold)
+  const extras = linked ? validLines.filter((l) => l.sold == null) : []
 
   const chooseCustomer = (cid: number) => {
     setLinked(null)
@@ -325,6 +327,12 @@ function ReturnEditor({ initial, invoice, isEditing, submitting, returnNo, onCan
   const chooseProduct = (key: string, pid: number) => {
     const p = pmap.get(pid)
     if (!p) return
+    // on the linked invoice: priced as sold, and no more than were sold can come back
+    const asSold = linked?.lines.filter((l) => l.productId === pid) ?? []
+    if (asSold.length) {
+      setLine(key, { productId: pid, unitPrice: asSold[0].unitPrice, discPct: asSold[0].discPct, sold: asSold.reduce((s, l) => s + l.qty + l.freeQty, 0) })
+      return
+    }
     const q = ctx ? quotePrice({ product: p, customer: customer ?? null, ...ctx, qty: 1, date: d.date }) : null
     setLine(key, { productId: pid, unitPrice: q?.unitPrice ?? p.sellPrice, discPct: q?.discPct ?? 0 })
   }
@@ -336,6 +344,7 @@ function ReturnEditor({ initial, invoice, isEditing, submitting, returnNo, onCan
     if (!validLines.length) e.lines = 'Enter the quantity that came back on at least one item'
     d.lines.forEach((l, i) => {
       if (l.productId && l.sold != null && l.qty + l.freeQty > l.sold) e[`line${l.key}`] = `Line ${i + 1}: only ${l.sold} were sold on ${linked?.invoiceNo ?? 'that invoice'}`
+      if (linked && l.sold == null && l.productId && l.qty + l.freeQty === 0) e[`line${l.key}`] = `Line ${i + 1}: enter the quantity that came back`
       if (l.unitPrice < 0) e[`line${l.key}`] = `Line ${i + 1}: price cannot be negative`
       if (l.discPct < 0 || l.discPct > 100) e[`line${l.key}`] = `Line ${i + 1}: discount must be 0–100`
     })
@@ -455,11 +464,11 @@ function ReturnEditor({ initial, invoice, isEditing, submitting, returnNo, onCan
                 <div className="grid grid-cols-4 items-start gap-2 md:grid-cols-[1.5rem_minmax(160px,1fr)_3.5rem_3.75rem_3.75rem_6rem_4rem_6rem_2rem] md:items-center md:gap-1.5 xl:gap-2">
                   <span className="hidden text-sm text-stone-400 md:block">{i + 1}</span>
                   <div className="col-span-3 md:col-span-1">
-                    {linked ? (
+                    {l.sold != null ? (
                       <span className="block truncate text-sm font-medium">{p ? productLabel(p) : `Item #${l.productId}`}</span>
                     ) : (
                       <Combobox
-                        items={products.filter((x) => x.active || x.id === l.productId)}
+                        items={products.filter((x) => (x.active || x.id === l.productId) && (!linked || x.id === l.productId || !d.lines.some((y) => y.productId === x.id)))}
                         value={l.productId}
                         onChange={(pid) => chooseProduct(l.key, pid)}
                         getId={(x) => x.id}
@@ -477,12 +486,12 @@ function ReturnEditor({ initial, invoice, isEditing, submitting, returnNo, onCan
                     )}
                   </div>
                   <div className="flex justify-end md:contents">
-                    {!linked && (
+                    {l.sold == null && (
                       <button className="btn-ghost p-2 text-stone-400 hover:text-red-600 max-md:min-h-10 max-md:min-w-10 md:order-last" onClick={() => setD((x) => ({ ...x, lines: x.lines.length > 1 ? x.lines.filter((y) => y.key !== l.key) : [blank()] }))} aria-label="Remove line">
                         <Trash2 size={16} />
                       </button>
                     )}
-                    {linked && <span className="hidden md:order-last md:block" />}
+                    {l.sold != null && <span className="hidden md:order-last md:block" />}
                   </div>
                   <span className={`hidden text-right text-sm tabular-nums md:block ${tooMany ? 'font-semibold text-red-600' : 'text-stone-500'}`}>{l.sold ?? ''}</span>
                   <MobileLabel label="Qty"><NumberInput aria-label="Qty" min={0} step={1} className="px-2 py-1.5" value={l.qty} onChange={(v) => setLine(l.key, { qty: Math.max(0, Math.round(v ?? 0)) })} /></MobileLabel>
@@ -499,6 +508,7 @@ function ReturnEditor({ initial, invoice, isEditing, submitting, returnNo, onCan
                     {p && <span className="font-mono">{p.code}</span>}
                     {l.sold != null && <span className={`md:hidden ${tooMany ? 'font-semibold text-red-600' : ''}`}>Sold {l.sold}</span>}
                     {tooMany && <span className="font-medium text-red-600">more than were sold</span>}
+                    {linked && p && l.sold == null && <Badge tone="blue">Added item, not on {linked.invoiceNo}</Badge>}
                     {err && <span className="font-medium text-red-600">{err}</span>}
                   </div>
                 )}
@@ -507,11 +517,8 @@ function ReturnEditor({ initial, invoice, isEditing, submitting, returnNo, onCan
           })}
         </ul>
         <div className="flex flex-wrap items-center gap-3 border-t border-stone-100 p-3">
-          {linked ? (
-            <span className="text-sm text-stone-500">Type the quantity that came back on each line — lines left at 0 are not returned.</span>
-          ) : (
-            <button className="btn-secondary" onClick={() => setD((x) => ({ ...x, lines: [...x.lines, blank()] }))}><Plus size={16} /> Add item</button>
-          )}
+          <button className="btn-secondary" onClick={() => setD((x) => ({ ...x, lines: [...x.lines, blank()] }))}><Plus size={16} /> {linked ? 'Add another item' : 'Add item'}</button>
+          {linked && <span className="text-sm text-stone-500">Change the quantity or price on any line. Lines left at 0 are not returned.</span>}
           {errors.lines && <span className="text-sm font-medium text-red-600" data-error="true">{errors.lines}</span>}
         </div>
       </div>
@@ -519,6 +526,7 @@ function ReturnEditor({ initial, invoice, isEditing, submitting, returnNo, onCan
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="space-y-3">
           {over.length > 0 && <Warn>{over.length} line(s) take back more than {linked?.invoiceNo} sold.</Warn>}
+          {extras.length > 0 && <Warn>{extras.length} added item(s) are not on {linked?.invoiceNo}. Check the price, because it is not the price on this invoice.</Warn>}
           {!d.restock && validLines.length > 0 && <Warn>These goods are written off: stock will not change and the cost is lost.</Warn>}
           {customer && credited > 0 && customer.balance - credited < -0.004 && <Warn>{customer.name} will have Rs {rs(credited - Math.max(customer.balance, 0))} credit with you after this return — use it on the next invoice or refund it in cash.</Warn>}
         </div>

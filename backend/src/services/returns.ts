@@ -78,7 +78,10 @@ export async function saveReturn(db: DB, input: SalesReturnInput, id?: number): 
       const already = await returnedOnInvoice(tx, inv.id, existing?.id)
       for (const [pid, units] of unitsByProduct(input.lines)) {
         const soldQty = soldUnits.get(pid) ?? 0
-        if (!soldQty) throw badRequest(`${label.get(pid)} is not on ${inv.invoiceNo}`)
+        if (!soldQty) {
+          if (input.extraItems) continue // added by hand: goods from an earlier bill, priced on the return
+          throw badRequest(`${label.get(pid)} is not on ${inv.invoiceNo}`)
+        }
         const before = already.get(pid) ?? 0
         if (units + before > soldQty) {
           throw badRequest(`${label.get(pid)}: ${inv.invoiceNo} sold ${soldQty}${before ? ` and ${before} already came back` : ''} — cannot take back ${units}`)

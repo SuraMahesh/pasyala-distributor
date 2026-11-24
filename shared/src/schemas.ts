@@ -158,6 +158,8 @@ export const salesReturnSchema = z
     date,
     customerId: z.number().int({ message: 'Choose a customer' }),
     salesInvoiceId: z.number().int().positive().nullable().default(null),
+    /** the return also takes back items that are not on that invoice (goods from an earlier bill) */
+    extraItems: z.boolean().optional(),
     reason: z.enum(RETURN_REASONS),
     restock: z.boolean().default(true),
     billDiscPct: pct,

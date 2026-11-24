@@ -1,0 +1,1409 @@
+{
+ "_about": "15 handwritten Pasyale bill-book sales of 17, 19 and 22 Nov 2026, transcribed from photos. Run from backend/: npm run db:import-sales -- src/db/imports/sales-2026-11-22.json [--apply] [--photos .data/import-photos/sales-2026-11-22]",
+ "payMethod": "Credit",
+ "customers": [
+  {
+   "code": "MD-PEIRIS-OSU",
+   "name": "M D Peiris Osu - Kurunegala",
+   "typeCode": "PHARMACY",
+   "discPct": 35,
+   "area": "Kurunegala",
+   "phone": "037 2224950",
+   "address": "No 70-72, Puttalam Road, Kurunegala",
+   "notes": "Stamp: C/S M.D. Peiris & Co (Pvt) Ltd"
+  },
+  {
+   "code": "DAMBULLA-OSU",
+   "name": "Dambulla Osu",
+   "typeCode": "PHARMACY",
+   "discPct": 30,
+   "area": "Dambulla",
+   "creditDays": 30
+  },
+  {
+   "code": "DR-ZULFI",
+   "name": "Dr Zulfi - Ibbankatuwa",
+   "typeCode": "MEDICAL",
+   "discPct": 35,
+   "area": "Ibbankatuwa, Dambulla"
+  },
+  {
+   "code": "DR-CHAMILA",
+   "name": "Dr Chamila - Dambulla",
+   "typeCode": "MEDICAL",
+   "discPct": 30,
+   "area": "Dambulla"
+  },
+  {
+   "code": "NUSAIRS-OSU",
+   "name": "Nusairs Osu - Ridigama",
+   "typeCode": "PHARMACY",
+   "discPct": 35,
+   "area": "Ridigama"
+  },
+  {
+   "code": "ISIWARA-OSU",
+   "name": "Isiwara Osu - Dambulla",
+   "typeCode": "PHARMACY",
+   "discPct": 30,
+   "area": "Dambulla",
+   "notes": "Name read from the bill 189800, please verify"
+  },
+  {
+   "code": "DR-WIJETHUNGA",
+   "name": "Dr K.R.J.S. Wijethunga - Mawanella",
+   "typeCode": "MEDICAL",
+   "discPct": 35,
+   "area": "Mawanella",
+   "notes": "Bill names Dr Sadayuwan; stamp Dr K.R.J.S. Wijethunga, SLAMC 13934"
+  },
+  {
+   "code": "SANDAYA-OSU",
+   "name": "Sandaya Osu - Yattogoda",
+   "typeCode": "PHARMACY",
+   "discPct": 30,
+   "area": "Yattogoda",
+   "phone": "071-3441562"
+  },
+  {
+   "code": "SRI-RAWANA-OSU",
+   "name": "Sri Rawana Osu - Galigamuwa",
+   "typeCode": "PHARMACY",
+   "discPct": 30,
+   "area": "Galigamuwa"
+  },
+  {
+   "code": "SARASWATHI-OSU",
+   "name": "Saraswathi Osu - Kegalle",
+   "typeCode": "PHARMACY",
+   "discPct": 35,
+   "area": "Kegalle"
+  },
+  {
+   "code": "SIDDHA-LOKA-OSU",
+   "name": "Siddha Loka Osu - Kotikumbura",
+   "typeCode": "PHARMACY",
+   "discPct": 35,
+   "area": "Kotikumbura",
+   "phone": "071-5343788",
+   "notes": "Name read from bill 190058, please verify"
+  },
+  {
+   "code": "LAKSHMI-OSU",
+   "name": "Sri Lakshmi Ayurveda Osu Sala - Nelundeniya",
+   "typeCode": "PHARMACY",
+   "discPct": 35,
+   "area": "Nelundeniya"
+  },
+  {
+   "code": "AROGYA-OSU",
+   "name": "Arogya Osu - Mawanella",
+   "typeCode": "PHARMACY",
+   "discPct": 35,
+   "area": "Mawanella",
+   "phone": "070 5678679 / 077 3783153",
+   "address": "No 54, Mawanella"
+  }
+ ],
+ "invoices": [
+  {
+   "billNo": "189790",
+   "date": "2026-11-17",
+   "customer": "MD-PEIRIS-OSU",
+   "billDiscPct": 35,
+   "payMethod": "Cheque",
+   "paid": 63030.5,
+   "written": {
+    "gross": 104370,
+    "netTotal": 67840.5
+   },
+   "photos": [
+    "189790-p1.jpg"
+   ],
+   "note": "One cheque with bill 189791: 67,840.50 + 3,900 less return 4,810 = 66,930.50",
+   "lines": [
+    {
+     "code": "THBT0180",
+     "size": "180ML",
+     "name": "BATU THEL",
+     "qty": 6,
+     "price": 950
+    },
+    {
+     "code": "UNRK0025",
+     "size": "25g",
+     "name": "ROHANEKASH",
+     "qty": 12,
+     "price": 180
+    },
+    {
+     "code": "UNRK0050",
+     "size": "50g",
+     "name": "ROHANEKASH",
+     "qty": 12,
+     "price": 350
+    },
+    {
+     "code": "NPSD0050",
+     "size": "50g",
+     "name": "SUWADA DUPAYA",
+     "qty": 12,
+     "price": 120
+    },
+    {
+     "code": "RSRH0200",
+     "size": "200g",
+     "name": "RANAHANSA RASAYANA",
+     "qty": 6,
+     "price": 1200
+    },
+    {
+     "code": "CHSU0100",
+     "size": "100g",
+     "name": "SUDARSHANA CHOORNA",
+     "qty": 6,
+     "price": 600
+    },
+    {
+     "code": "VTCH0100",
+     "size": "100g",
+     "name": "CHANDRAPRABHA VATI",
+     "qty": 6,
+     "price": 1100
+    },
+    {
+     "code": "GGGK0100",
+     "size": "100g",
+     "name": "GOKSHURADI",
+     "qty": 12,
+     "price": 1300
+    },
+    {
+     "code": "THMP0180",
+     "size": "180ML",
+     "name": "MAHA PAKSHAGATHA",
+     "qty": 3,
+     "price": 1300
+    },
+    {
+     "code": "THEN0750",
+     "size": "750ML",
+     "name": "NEELYADI",
+     "qty": 3,
+     "price": 2800
+    },
+    {
+     "code": "THSP0750",
+     "size": "750ML",
+     "name": "SARSHAPADI",
+     "qty": 3,
+     "price": 3200
+    },
+    {
+     "code": "ARAS0750",
+     "size": "750ML",
+     "name": "ASHOKARISHTAYA",
+     "qty": 3,
+     "price": 950
+    },
+    {
+     "code": "THMM0180",
+     "size": "180ML",
+     "name": "MAHAMASHA",
+     "qty": 6,
+     "price": 1200
+    },
+    {
+     "code": "THMS0180",
+     "size": "180ML",
+     "name": "MAHASIDDRTHA",
+     "qty": 6,
+     "price": 850
+    },
+    {
+     "code": "NPCS-P0100",
+     "size": "100ML",
+     "name": "PAWATTA WELMEE",
+     "qty": 6,
+     "price": 400
+    },
+    {
+     "code": "LPDL0100",
+     "size": "100g",
+     "name": "DASHANGA LEPA",
+     "qty": 3,
+     "price": 900
+    },
+    {
+     "code": "THKU0180",
+     "size": "180ML",
+     "name": "KUBJAPRASARINI",
+     "qty": 6,
+     "price": 1300
+    },
+    {
+     "code": "THKB0030",
+     "size": "30ML",
+     "name": "KEDUMBINDUM",
+     "qty": 6,
+     "price": 200
+    },
+    {
+     "code": "THEN0030",
+     "size": "30ML",
+     "name": "NEELYADI",
+     "qty": 6,
+     "price": 200
+    },
+    {
+     "code": "THPN0030",
+     "size": "30ML",
+     "name": "PINDA",
+     "qty": 12,
+     "price": 200,
+     "free": 1
+    },
+    {
+     "code": "THSE0030",
+     "size": "30ML",
+     "name": "SEETHODAKA",
+     "qty": 6,
+     "price": 220
+    },
+    {
+     "code": "UNKNOWN-SUDDA-THRIPALA",
+     "size": "180 tabs",
+     "name": "SUDDA THRIPALA TABLETS",
+     "qty": 3,
+     "price": 600
+    }
+   ]
+  },
+  {
+   "billNo": "189791",
+   "date": "2026-11-17",
+   "customer": "MD-PEIRIS-OSU",
+   "billDiscPct": 35,
+   "payMethod": "Cheque",
+   "paid": "full",
+   "written": {
+    "gross": 6000,
+    "netTotal": 3900
+   },
+   "photos": [
+    "189791-p1.jpg"
+   ],
+   "note": "Cheque ticked, no number or date written",
+   "lines": [
+    {
+     "code": "GLMV0050",
+     "size": "50g",
+     "name": "MAHASANKA VATI",
+     "qty": 3,
+     "price": 2000
+    }
+   ],
+   "return": {
+    "written": {
+     "gross": 7400,
+     "netTotal": 4810
+    },
+    "note": "RTN on the bill",
+    "lines": [
+     {
+      "code": "LPDL0100",
+      "size": "100g",
+      "name": "DASHANGA LEPA",
+      "qty": 1,
+      "price": 550
+     },
+     {
+      "code": "ARAS0375",
+      "size": "375ML",
+      "name": "ASHOKARISHTAYA",
+      "qty": 1,
+      "price": 450
+     },
+     {
+      "code": "RSDP0400",
+      "size": "400g",
+      "name": "DHATHUPRUSHTI RASAYANA",
+      "qty": 4,
+      "price": 1600
+     }
+    ]
+   }
+  },
+  {
+   "billNo": "189794",
+   "date": "2026-11-19",
+   "customer": "DAMBULLA-OSU",
+   "billDiscPct": 30,
+   "payMethod": "Credit",
+   "paid": 0,
+   "written": {
+    "gross": 29930,
+    "netTotal": 20951
+   },
+   "photos": [
+    "189794-p1.jpg"
+   ],
+   "note": "Credit ticked, 30 days",
+   "lines": [
+    {
+     "code": "THPN0030",
+     "size": "30ML",
+     "name": "PINDA",
+     "qty": 36,
+     "price": 200,
+     "free": 3
+    },
+    {
+     "code": "NPKP0100",
+     "size": "100g",
+     "name": "KETA KELLA PATHTHUWA",
+     "qty": 6,
+     "price": 600
+    },
+    {
+     "code": "THST0180",
+     "size": "180ML",
+     "name": "SATYAVADI",
+     "qty": 3,
+     "price": 1150
+    },
+    {
+     "code": "THNK0100",
+     "size": "100ML",
+     "name": "NEELA KESHIKA",
+     "qty": 6,
+     "price": 380
+    },
+    {
+     "code": "THMP0180",
+     "size": "180ML",
+     "name": "MAHA PAKSHAGATHA",
+     "qty": 3,
+     "price": 1300
+    },
+    {
+     "code": "NPMD0450",
+     "size": "450ML",
+     "name": "MADUSAMANI QUATHA",
+     "qty": 3,
+     "price": 1200
+    },
+    {
+     "code": "NPMS0450",
+     "size": "450ML",
+     "name": "MEDASAMANI",
+     "qty": 3,
+     "price": 1300
+    },
+    {
+     "code": "UNKNOWN-SUWADARANI",
+     "size": "50g",
+     "name": "SUWADARANI",
+     "qty": 10,
+     "price": 200
+    }
+   ]
+  },
+  {
+   "billNo": "189795",
+   "date": "2026-11-19",
+   "customer": "DR-ZULFI",
+   "billDiscPct": 35,
+   "payMethod": "Credit",
+   "paid": 0,
+   "written": {
+    "gross": 175900,
+    "netTotal": 114335
+   },
+   "photos": [
+    "189795-p1.jpg"
+   ],
+   "note": "Credit ticked. Last line written as half kg? x2 for 12,000",
+   "lines": [
+    {
+     "code": "CHTH1000",
+     "size": "1kg",
+     "name": "THALISADI",
+     "qty": 8,
+     "price": 3700
+    },
+    {
+     "code": "THMN4500",
+     "size": "4.5L",
+     "name": "MAHA NARAYANA",
+     "qty": 1,
+     "price": 16000
+    },
+    {
+     "code": "THBT4500",
+     "size": "4.5L",
+     "name": "BATU THEL",
+     "qty": 1,
+     "price": 16500
+    },
+    {
+     "code": "THNR4500",
+     "size": "4.5L",
+     "name": "NIRGUNDIYADI",
+     "qty": 1,
+     "price": 16500
+    },
+    {
+     "code": "VTSR1000",
+     "size": "1kg",
+     "name": "SEETHARAMA VATI",
+     "qty": 3,
+     "price": 13500
+    },
+    {
+     "code": "VTMM1000",
+     "size": "1kg",
+     "name": "MADUMEGA VATI",
+     "qty": 3,
+     "price": 10600
+    },
+    {
+     "code": "GGYG1000",
+     "size": "1kg",
+     "name": "YOGARAJA",
+     "qty": 1,
+     "price": 13000
+    },
+    {
+     "code": "GGYG0500",
+     "size": "500g",
+     "name": "YOGARAJA",
+     "qty": 2,
+     "price": 6000
+    }
+   ]
+  },
+  {
+   "billNo": "189796",
+   "date": "2026-11-19",
+   "customer": "DR-CHAMILA",
+   "billDiscPct": 30,
+   "payMethod": "Cash",
+   "paid": "full",
+   "written": {
+    "gross": 48660,
+    "netTotal": 34062
+   },
+   "photos": [
+    "189796-p1.jpg"
+   ],
+   "note": "Cash ticked, bill closed, cash paid 19/11/2026",
+   "lines": [
+    {
+     "code": "NPKP1000",
+     "size": "1kg",
+     "name": "KETA KELLA PATHTHUWA",
+     "qty": 6,
+     "price": 5000
+    },
+    {
+     "code": "LPDL1000",
+     "size": "1kg",
+     "name": "DASHANGA LEPA",
+     "qty": 1,
+     "price": 7500
+    },
+    {
+     "code": "VTCH0100",
+     "size": "100g",
+     "name": "CHANDRAPRABHA VATI",
+     "qty": 1,
+     "price": 1100
+    },
+    {
+     "code": "UNMS0025",
+     "size": "25g",
+     "name": "MANJANEI SHRUK (TOOTH POWDER)",
+     "qty": 12,
+     "price": 130
+    },
+    {
+     "code": "THNR0180",
+     "size": "180ML",
+     "name": "NIRGUNDIYADI",
+     "qty": 10,
+     "price": 850
+    }
+   ]
+  },
+  {
+   "billNo": "189799",
+   "date": "2026-11-19",
+   "customer": "NUSAIRS-OSU",
+   "billDiscPct": 35,
+   "payMethod": "Cash",
+   "paid": "full",
+   "written": {
+    "gross": 43400,
+    "netTotal": 28210
+   },
+   "photos": [
+    "189799-p1.jpg"
+   ],
+   "note": "Cash ticked, stamped PAID",
+   "lines": [
+    {
+     "code": "GGYG0100",
+     "size": "100g",
+     "name": "YOGARAJA",
+     "qty": 10,
+     "price": 1350
+    },
+    {
+     "code": "VTTP0100",
+     "size": "100g",
+     "name": "THRIPALA VATI",
+     "qty": 10,
+     "price": 1000
+    },
+    {
+     "code": "THSV0180",
+     "size": "180ML",
+     "name": "SARVAVISADI",
+     "qty": 6,
+     "price": 850
+    },
+    {
+     "code": "THKB0750",
+     "size": "750ML",
+     "name": "KEDUMBINDUM",
+     "qty": 2,
+     "price": 3200
+    },
+    {
+     "code": "OTRW4500",
+     "size": "4.5L",
+     "name": "ROSE WATER",
+     "qty": 3,
+     "price": 2800
+    }
+   ]
+  },
+  {
+   "billNo": "189800",
+   "date": "2026-11-19",
+   "customer": "ISIWARA-OSU",
+   "billDiscPct": 30,
+   "payMethod": "Cheque",
+   "paid": "full",
+   "written": {
+    "gross": 53100,
+    "netTotal": 37170
+   },
+   "photos": [
+    "189800-p1.jpg"
+   ],
+   "note": "Cheque ticked, no number or date written",
+   "lines": [
+    {
+     "code": "ATCS0180",
+     "size": "180ML",
+     "name": "CASTOR OIL",
+     "qty": 12,
+     "price": 690
+    },
+    {
+     "code": "ATGN0180",
+     "size": "180ML",
+     "name": "THALA THEL",
+     "qty": 12,
+     "price": 670
+    },
+    {
+     "code": "ATME0180",
+     "size": "180ML",
+     "name": "MEE THEL",
+     "qty": 12,
+     "price": 650
+    },
+    {
+     "code": "ATNE0180",
+     "size": "180ML",
+     "name": "KOHOMBA THEL",
+     "qty": 12,
+     "price": 670
+    },
+    {
+     "code": "ATPS0180",
+     "size": "180ML",
+     "name": "PAS THEL",
+     "qty": 12,
+     "price": 750
+    },
+    {
+     "code": "ATGN0030",
+     "size": "30ML",
+     "name": "THALA THEL",
+     "qty": 24,
+     "price": 170
+    },
+    {
+     "code": "ATGL0030",
+     "size": "30ML",
+     "name": "GHEE OIL",
+     "qty": 24,
+     "price": 280
+    },
+    {
+     "code": "THNK0100",
+     "size": "100ML",
+     "name": "NEELA KESHIKA",
+     "qty": 3,
+     "price": 380
+    }
+   ]
+  },
+  {
+   "billNo": "190051",
+   "date": "2026-11-22",
+   "customer": "DR-WIJETHUNGA",
+   "billDiscPct": 35,
+   "payMethod": "Credit",
+   "paid": 0,
+   "written": {
+    "gross": 76500,
+    "netTotal": 49725
+   },
+   "photos": [
+    "190051-p1.jpg"
+   ],
+   "note": "Credit ticked, will transfer. Sarshapadi 4.5L written on two lines",
+   "lines": [
+    {
+     "code": "THEN4500",
+     "size": "4.5L",
+     "name": "NEELYADI",
+     "qty": 3,
+     "price": 14500
+    },
+    {
+     "code": "THSP4500",
+     "size": "4.5L",
+     "name": "SARSHAPADI",
+     "qty": 2,
+     "price": 16500
+    }
+   ]
+  },
+  {
+   "billNo": "190052",
+   "date": "2026-11-22",
+   "customer": "SANDAYA-OSU",
+   "billDiscPct": 30,
+   "payMethod": "Cheque",
+   "paid": 55853,
+   "written": {
+    "gross": 84390,
+    "netTotal": 59073
+   },
+   "photos": [
+    "190052-p1.jpg"
+   ],
+   "note": "Cheque ticked. Bill deducts 3,220 with no items listed, leaving 55,853; the 3,220 stays due until explained",
+   "lines": [
+    {
+     "code": "THAG0200",
+     "size": "200g",
+     "name": "ASHWAGANDHA GRUTHA",
+     "qty": 6,
+     "price": 1950
+    },
+    {
+     "code": "THBG0200",
+     "size": "200g",
+     "name": "BRCHMEE GRUTHA",
+     "qty": 6,
+     "price": 1100
+    },
+    {
+     "code": "THMN0180",
+     "size": "180ML",
+     "name": "MAHA NARAYANA",
+     "qty": 12,
+     "price": 800
+    },
+    {
+     "code": "THAS0180",
+     "size": "180ML",
+     "name": "ASHWAGANDA THEL",
+     "qty": 6,
+     "price": 1000
+    },
+    {
+     "code": "THSU0180",
+     "size": "180ML",
+     "name": "SOOLAHARA",
+     "qty": 6,
+     "price": 800
+    },
+    {
+     "code": "THPN0180",
+     "size": "180ML",
+     "name": "PINDA",
+     "qty": 6,
+     "price": 850
+    },
+    {
+     "code": "GGPN0100",
+     "size": "100g",
+     "name": "PANCHATITTA",
+     "qty": 3,
+     "price": 1300
+    },
+    {
+     "code": "THSR0100",
+     "size": "100g",
+     "name": "SARPAGANDA",
+     "qty": 3,
+     "price": 700
+    },
+    {
+     "code": "CHSU0050",
+     "size": "50g",
+     "name": "SUDARSHANA CHOORNA",
+     "qty": 3,
+     "price": 320
+    },
+    {
+     "code": "CHSU0100",
+     "size": "100g",
+     "name": "SUDARSHANA CHOORNA",
+     "qty": 3,
+     "price": 600
+    },
+    {
+     "code": "CHTH0050",
+     "size": "50g",
+     "name": "THALISADI",
+     "qty": 3,
+     "price": 230
+    },
+    {
+     "code": "CHBK0050",
+     "size": "50g",
+     "name": "BASKARALAWANA",
+     "qty": 6,
+     "price": 290
+    },
+    {
+     "code": "CHBK0100",
+     "size": "100g",
+     "name": "BASKARALAWANA",
+     "qty": 3,
+     "price": 480
+    },
+    {
+     "code": "ROSW0050",
+     "size": "50g",
+     "name": "SWASAKUTARA",
+     "qty": 3,
+     "price": 4600
+    },
+    {
+     "code": "UNMS0025",
+     "size": "25g",
+     "name": "MANJANEI SHRUK (TOOTH POWDER)",
+     "qty": 12,
+     "price": 130
+    },
+    {
+     "code": "THPN0030",
+     "size": "30ML",
+     "name": "PINDA",
+     "qty": 12,
+     "price": 200,
+     "free": 1
+    },
+    {
+     "code": "THKU0030",
+     "size": "30ML",
+     "name": "KUBJAPRASARINI",
+     "qty": 12,
+     "price": 300,
+     "free": 1
+    },
+    {
+     "code": "THMP0030",
+     "size": "30ML",
+     "name": "MAHA PAKSHAGATHA",
+     "qty": 12,
+     "price": 300,
+     "free": 1
+    },
+    {
+     "code": "VTTP0100",
+     "size": "100g",
+     "name": "THRIPALA VATI",
+     "qty": 3,
+     "price": 1000
+    }
+   ]
+  },
+  {
+   "billNo": "190053",
+   "date": "2026-11-22",
+   "customer": "SRI-RAWANA-OSU",
+   "billDiscPct": 30,
+   "payMethod": "Cheque",
+   "paid": 15708,
+   "written": {
+    "gross": 23880,
+    "netTotal": 16716
+   },
+   "photos": [
+    "190053-p1.jpg"
+   ],
+   "note": "Cheque ticked, 16,716 less return 1,008 = 15,708",
+   "lines": [
+    {
+     "code": "THPN0180",
+     "size": "180ML",
+     "name": "PINDA",
+     "qty": 12,
+     "price": 850
+    },
+    {
+     "code": "THEN0180",
+     "size": "180ML",
+     "name": "NEELYADI",
+     "qty": 6,
+     "price": 800
+    },
+    {
+     "code": "OTRW0180",
+     "size": "180ML",
+     "name": "ROSE WATER",
+     "qty": 6,
+     "price": 230
+    },
+    {
+     "code": "THTH0450",
+     "size": "450ML",
+     "name": "THRIKATUKADI",
+     "qty": 3,
+     "price": 900
+    },
+    {
+     "code": "THPN0030",
+     "size": "30ML",
+     "name": "PINDA",
+     "qty": 24,
+     "price": 200,
+     "free": 2
+    }
+   ],
+   "return": {
+    "written": {
+     "gross": 1440,
+     "netTotal": 1008
+    },
+    "note": "RTN on the bill: rose water x9 @160, size not written (entered as 180ml)",
+    "lines": [
+     {
+      "code": "OTRW0180",
+      "size": "180ML",
+      "name": "ROSE WATER",
+      "qty": 9,
+      "price": 160
+     }
+    ]
+   }
+  },
+  {
+   "billNo": "190054",
+   "date": "2026-11-22",
+   "customer": "SARASWATHI-OSU",
+   "billDiscPct": 35,
+   "payMethod": "Cash",
+   "paid": "full",
+   "written": {
+    "gross": 12000,
+    "netTotal": 7800
+   },
+   "photos": [
+    "190054-p1.jpg"
+   ],
+   "note": "Cash ticked, paid 11/22. First totals struck out",
+   "lines": [
+    {
+     "code": "NPCS-P0100",
+     "size": "100ML",
+     "name": "PAWATTA WELMEE",
+     "qty": 12,
+     "price": 400,
+     "free": 1
+    },
+    {
+     "code": "LPDL0050",
+     "size": "50g",
+     "name": "DASHANGA LEPA",
+     "qty": 6,
+     "price": 500
+    },
+    {
+     "code": "THBU0030",
+     "size": "30ML",
+     "name": "BRUNGAMALAKA",
+     "qty": 6,
+     "price": 200
+    },
+    {
+     "code": "OTNK0050",
+     "size": "50g",
+     "name": "NAWARATHNA KALKA",
+     "qty": 12,
+     "price": 250
+    }
+   ]
+  },
+  {
+   "billNo": "190058",
+   "date": "2026-11-22",
+   "customer": "SIDDHA-LOKA-OSU",
+   "billDiscPct": 35,
+   "payMethod": "Cash",
+   "paid": 31122,
+   "written": {
+    "gross": 49000,
+    "netTotal": 31850
+   },
+   "photos": [
+    "190058-p1.jpg"
+   ],
+   "note": "Cash ticked (cheque crossed out). Sarshapadi 4.5L struck out. 31,850 less return 728 = 31,122",
+   "lines": [
+    {
+     "code": "THPN4500",
+     "size": "4.5L",
+     "name": "PINDA",
+     "qty": 1,
+     "price": 15000
+    },
+    {
+     "code": "THMN4500",
+     "size": "4.5L",
+     "name": "MAHA NARAYANA",
+     "qty": 1,
+     "price": 16000
+    },
+    {
+     "code": "THSV4500",
+     "size": "4.5L",
+     "name": "SARVAVISADI",
+     "qty": 1,
+     "price": 18000
+    }
+   ],
+   "return": {
+    "written": {
+     "gross": 1120,
+     "netTotal": 728
+    },
+    "note": "RTN on the bill",
+    "lines": [
+     {
+      "code": "VTSR0050",
+      "size": "50g",
+      "name": "SEETHARAMA VATI",
+      "qty": 1,
+      "price": 800
+     },
+     {
+      "code": "UNKNOWN-EKAVERIYA-50",
+      "size": "50g",
+      "name": "EKAVERIYA",
+      "qty": 1,
+      "price": 320
+     }
+    ]
+   }
+  },
+  {
+   "billNo": "190059",
+   "date": "2026-11-22",
+   "customer": "LAKSHMI-OSU",
+   "billDiscPct": 35,
+   "payMethod": "Cash",
+   "paid": "full",
+   "written": {
+    "gross": 24800,
+    "netTotal": 16120
+   },
+   "photos": [
+    "190059-p1.jpg"
+   ],
+   "note": "Cash ticked",
+   "lines": [
+    {
+     "code": "THMP0180",
+     "size": "180ML",
+     "name": "MAHA PAKSHAGATHA",
+     "qty": 1,
+     "price": 1300
+    },
+    {
+     "code": "THAS0180",
+     "size": "180ML",
+     "name": "ASHWAGANDA THEL",
+     "qty": 2,
+     "price": 1000
+    },
+    {
+     "code": "THKU0180",
+     "size": "180ML",
+     "name": "KUBJAPRASARINI",
+     "qty": 2,
+     "price": 1300
+    },
+    {
+     "code": "THMN0030",
+     "size": "30ML",
+     "name": "MAHA NARAYANA",
+     "qty": 12,
+     "price": 200,
+     "free": 1
+    },
+    {
+     "code": "THMS0030",
+     "size": "30ML",
+     "name": "MAHASIDDRTHA",
+     "qty": 12,
+     "price": 200,
+     "free": 1
+    },
+    {
+     "code": "THNR0030",
+     "size": "30ML",
+     "name": "NIRGUNDIYADI",
+     "qty": 12,
+     "price": 200,
+     "free": 1
+    },
+    {
+     "code": "GGYG0050",
+     "size": "50g",
+     "name": "YOGARAJA",
+     "qty": 1,
+     "price": 700
+    },
+    {
+     "code": "VTSR0050",
+     "size": "50g",
+     "name": "SEETHARAMA VATI",
+     "qty": 1,
+     "price": 800
+    },
+    {
+     "code": "VTCH0050",
+     "size": "50g",
+     "name": "CHANDRAPHABHA VATI",
+     "qty": 1,
+     "price": 600
+    },
+    {
+     "code": "NPCS-P0100",
+     "size": "100ML",
+     "name": "PAWATTA WELMEE",
+     "qty": 6,
+     "price": 400
+    },
+    {
+     "code": "THMN0180",
+     "size": "180ML",
+     "name": "MAHA NARAYANA",
+     "qty": 6,
+     "price": 800
+    },
+    {
+     "code": "THSU0030",
+     "size": "30ML",
+     "name": "SOOLAHARA",
+     "qty": 12,
+     "price": 200,
+     "free": 1
+    }
+   ]
+  },
+  {
+   "billNo": "190055",
+   "date": "2026-11-22",
+   "customer": "AROGYA-OSU",
+   "billDiscPct": 35,
+   "payMethod": "Credit",
+   "paid": 0,
+   "written": {
+    "gross": 142110,
+    "netTotal": 92371.5
+   },
+   "photos": [
+    "190055-p1.jpg"
+   ],
+   "note": "No payment box ticked. Bill deducts 1,495 with no items listed (90,876.50). Marks 10 and 5 in the free column not counted as free",
+   "lines": [
+    {
+     "code": "CHDH0050",
+     "size": "50g",
+     "name": "DHATHREE CHOORNA",
+     "qty": 12,
+     "price": 170
+    },
+    {
+     "code": "CHDH0100",
+     "size": "100g",
+     "name": "DHATHREE CHOORNA",
+     "qty": 12,
+     "price": 300
+    },
+    {
+     "code": "CHMB0050",
+     "size": "50g",
+     "name": "MANIBADRA",
+     "qty": 6,
+     "price": 300
+    },
+    {
+     "code": "CHTH0050",
+     "size": "50g",
+     "name": "THALISADI",
+     "qty": 9,
+     "price": 230
+    },
+    {
+     "code": "UNKNOWN-SUPUPA",
+     "size": "100g",
+     "name": "SUPUPA CHURNA",
+     "qty": 6,
+     "price": 500
+    },
+    {
+     "code": "CHSK0100",
+     "size": "100g",
+     "name": "SUKUMARA",
+     "qty": 6,
+     "price": 260
+    },
+    {
+     "code": "CHTR0050",
+     "size": "50g",
+     "name": "THRIPALA CHOORNA",
+     "qty": 6,
+     "price": 200
+    },
+    {
+     "code": "THNI0030",
+     "size": "30ML",
+     "name": "NISHADI",
+     "qty": 36,
+     "price": 220,
+     "free": 3
+    },
+    {
+     "code": "THKU0030",
+     "size": "30ML",
+     "name": "KUBJAPRASARINI",
+     "qty": 36,
+     "price": 300,
+     "free": 3
+    },
+    {
+     "code": "THKB0030",
+     "size": "30ML",
+     "name": "KEDUMBINDUM",
+     "qty": 24,
+     "price": 200,
+     "free": 2
+    },
+    {
+     "code": "THSV0030",
+     "size": "30ML",
+     "name": "SARVAVISADI",
+     "qty": 36,
+     "price": 200,
+     "free": 3
+    },
+    {
+     "code": "THSU0030",
+     "size": "30ML",
+     "name": "SOOLAHARA",
+     "qty": 36,
+     "price": 200,
+     "free": 3
+    },
+    {
+     "code": "UNRK0025",
+     "size": "25g",
+     "name": "ROHANEKASH",
+     "qty": 18,
+     "price": 180
+    },
+    {
+     "code": "UNRK0050",
+     "size": "50g",
+     "name": "ROHANEKASH",
+     "qty": 6,
+     "price": 350
+    },
+    {
+     "code": "UNRK0100",
+     "size": "100g",
+     "name": "ROHANEKASH",
+     "qty": 6,
+     "price": 460
+    },
+    {
+     "code": "THMN0030",
+     "size": "30ML",
+     "name": "MAHA NARAYANA",
+     "qty": 96,
+     "price": 200,
+     "free": 8
+    },
+    {
+     "code": "THPN0030",
+     "size": "30ML",
+     "name": "PINDA",
+     "qty": 48,
+     "price": 200,
+     "free": 4
+    },
+    {
+     "code": "THSP0030",
+     "size": "30ML",
+     "name": "SARSHAPADI",
+     "qty": 96,
+     "price": 220,
+     "free": 8
+    },
+    {
+     "code": "THCM0030",
+     "size": "30ML",
+     "name": "CAMPHOR/KAPURU",
+     "qty": 36,
+     "price": 250,
+     "free": 3
+    },
+    {
+     "code": "THMS0030",
+     "size": "30ML",
+     "name": "MAHASIDDRTHA",
+     "qty": 24,
+     "price": 200,
+     "free": 2
+    },
+    {
+     "code": "THNR0030",
+     "size": "30ML",
+     "name": "NIRGUNDIYADI",
+     "qty": 36,
+     "price": 200,
+     "free": 3
+    },
+    {
+     "code": "THSU0750",
+     "size": "750ML",
+     "name": "SOOLAHARA",
+     "qty": 3,
+     "price": 3300
+    }
+   ]
+  },
+  {
+   "billNo": "190060",
+   "date": "2026-11-22",
+   "customer": "AROGYA-OSU",
+   "billDiscPct": 35,
+   "payMethod": "Credit",
+   "paid": 0,
+   "written": {
+    "gross": 83450,
+    "netTotal": 54242.5
+   },
+   "photos": [
+    "190060-p1.jpg"
+   ],
+   "note": "No payment box visible. Marks 11 and 5 in the free column not counted as free",
+   "lines": [
+    {
+     "code": "THMN0750",
+     "size": "750ML",
+     "name": "MAHA NARAYANA",
+     "qty": 3,
+     "price": 2900
+    },
+    {
+     "code": "THCM0750",
+     "size": "750ML",
+     "name": "CAMPHOR/KAPURU",
+     "qty": 2,
+     "price": 3600
+    },
+    {
+     "code": "THEN0750",
+     "size": "750ML",
+     "name": "NEELYADI",
+     "qty": 3,
+     "price": 2800
+    },
+    {
+     "code": "THMN0180",
+     "size": "180ML",
+     "name": "MAHA NARAYANA",
+     "qty": 25,
+     "price": 800
+    },
+    {
+     "code": "THBU0180",
+     "size": "180ML",
+     "name": "BRUNGAMALAKA",
+     "qty": 3,
+     "price": 900
+    },
+    {
+     "code": "THSP0180",
+     "size": "180ML",
+     "name": "SARSHAPADI",
+     "qty": 12,
+     "price": 850
+    },
+    {
+     "code": "THNR0180",
+     "size": "180ML",
+     "name": "NIRGUNDIYADI",
+     "qty": 6,
+     "price": 850
+    },
+    {
+     "code": "THSR0100",
+     "size": "100g",
+     "name": "SARPAGANDA",
+     "qty": 3,
+     "price": 650
+    },
+    {
+     "code": "GGYG0100",
+     "size": "100g",
+     "name": "YOGARAJA",
+     "qty": 2,
+     "price": 1350
+    },
+    {
+     "code": "THWV0750",
+     "size": "750ML",
+     "name": "WATHA VIDURANGA",
+     "qty": 5,
+     "price": 3300
+    }
+   ]
+  }
+ ]
+}

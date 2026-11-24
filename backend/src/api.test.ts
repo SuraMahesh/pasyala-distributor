@@ -1080,3 +1080,30 @@ describe('order requests to the supplier', () => {
     expect((await api.get(`/api/order-requests/${ids.order1}`)).status).toBe(404)
   })
 })
+
+describe('sales return with an added item', () => {
+  it('takes back an item that is not on the invoice, at the typed qty and price, and keeps the limit on invoice items', async () => {
+    const line = (code: string, qty: number, unitPrice: number) => ({ productId: ids[code], qty, freeQty: 0, unitPrice, discPct: 0 })
+    const sale = await api.post('/api/sales').send({ date: today, customerId: ids.mc, payMethod: 'Credit', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [line('ATCS0030', 3, 200)] })
+    expect(sale.status).toBe(201)
+    const body = (lines: unknown[], extraItems?: boolean) => ({ date: today, customerId: ids.mc, salesInvoiceId: sale.body.id, extraItems, reason: 'Unsold stock', restock: true, billDiscPct: 0, refunded: 0, refundMethod: '', notes: '', lines })
+    const stockBefore = (await product('THMN0030')).onHand
+
+    expect((await api.post('/api/sales-returns').send(body([line('THMN0030', 2, 150)]))).status).toBe(400)
+    const tooMany = await api.post('/api/sales-returns').send(body([line('ATCS0030', 4, 200), line('THMN0030', 2, 150)], true))
+    expect(tooMany.status).toBe(400)
+
+    const saved = await api.post('/api/sales-returns').send(body([line('ATCS0030', 1, 180), line('THMN0030', 2, 150)], true))
+    expect(saved.status).toBe(201)
+    expect((await api.get(`/api/sales-returns/${saved.body.id}`)).body.netTotal).toBe(480)
+    expect((await product('THMN0030')).onHand).toBe(stockBefore + 2)
+
+    // the added item does not tie the invoice down; the item that was on it still does
+    const edit = (qty: number) => api.put(`/api/sales/${sale.body.id}`).send({ date: today, customerId: ids.mc, payMethod: 'Credit', billDiscPct: 0, paidOnInvoice: 0, notes: '', lines: [line('ATCS0030', qty, 200)] })
+    expect((await edit(2)).status).toBe(200)
+
+    expect((await api.delete(`/api/sales-returns/${saved.body.id}`)).status).toBe(200)
+    expect((await api.delete(`/api/sales/${sale.body.id}`)).status).toBe(200)
+    expect((await product('THMN0030')).onHand).toBe(stockBefore)
+  })
+})
